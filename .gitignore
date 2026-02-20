@@ -1,0 +1,16 @@
+venv/
+__pycache__/
+*.pyc
+
+# Flask instance + sqlite db
+instance/
+*.sqlite3
+*.db
+
+# Tailwind/node
+node_modules/
+app/static/css/app.css
+app/static/css/app.css.map
+
+# Env
+.env
