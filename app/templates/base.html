@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Finance Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <nav class="border-b border-slate-800">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a class="font-semibold" href="{{ url_for('dash.dashboard') }}">Finance Tracker</a>
+      <div class="flex gap-3 items-center">
+        {% if current_user.is_authenticated %}
+          <a class="text-slate-300 hover:text-white" href="{{ url_for('transactions.index') }}">Transactions</a>
+          <a class="text-slate-300 hover:text-white" href="{{ url_for('categories.index') }}">Categories</a>
+          <a class="text-slate-300 hover:text-white" href="{{ url_for('auth.profile') }}">Profile</a>
+          <form method="post" action="{{ url_for('auth.logout') }}">
+            {{ csrf_token() }}
+            <button class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700">Logout</button>
+          </form>
+        {% else %}
+          <a class="text-slate-300 hover:text-white" href="{{ url_for('auth.login') }}">Login</a>
+          <a class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('auth.register') }}">Register</a>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-5xl mx-auto px-4 py-6">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="space-y-2 mb-4">
+          {% for category, message in messages %}
+            <div class="p-3 rounded border border-slate-800 bg-slate-900">
+              <span class="text-slate-300">[{{ category }}]</span> {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
