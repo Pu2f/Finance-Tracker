@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-2xl font-semibold">Transactions</h1>
+  <div class="flex gap-2">
+    <a class="px-3 py-2 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('transactions.create', type='income') }}">Add Income</a>
+    <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('transactions.create', type='expense') }}">Add Expense</a>
+  </div>
+</div>
+
+<form class="mb-4 p-3 rounded bg-slate-900 border border-slate-800 flex flex-wrap gap-2 items-end" method="get">
+  <div>
+    <label class="block text-sm text-slate-400 mb-1">Type</label>
+    <select name="type" class="px-3 py-2 rounded bg-slate-950 border border-slate-800">
+      <option value="">All</option>
+      <option value="income" {% if request.args.get('type')=='income' %}selected{% endif %}>Income</option>
+      <option value="expense" {% if request.args.get('type')=='expense' %}selected{% endif %}>Expense</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-sm text-slate-400 mb-1">Start</label>
+    <input type="date" name="start" value="{{ request.args.get('start','') }}" class="px-3 py-2 rounded bg-slate-950 border border-slate-800">
+  </div>
+  <div>
+    <label class="block text-sm text-slate-400 mb-1">End</label>
+    <input type="date" name="end" value="{{ request.args.get('end','') }}" class="px-3 py-2 rounded bg-slate-950 border border-slate-800">
+  </div>
+  <button class="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700">Filter</button>
+</form>
+
+<div class="space-y-2">
+  {% for tx in transactions %}
+    <div class="p-3 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+      <div>
+        <div class="font-semibold">
+          {{ tx.tx_date }} —
+          {% if tx.type=='income' %}
+            <span class="text-emerald-300">+{{ tx.amount }}</span>
+          {% else %}
+            <span class="text-rose-300">-{{ tx.amount }}</span>
+          {% endif %}
+        </div>
+        <div class="text-slate-400 text-sm">
+          {{ tx.category.name if tx.category else 'No category' }}
+          {% if tx.note %} • {{ tx.note }}{% endif %}
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('transactions.edit', tx_id=tx.id) }}">Edit</a>
+        <form method="post" action="{{ url_for('transactions.delete', tx_id=tx.id) }}">
+          {{ csrf_token() }}
+          <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>
+        </form>
+      </div>
+    </div>
+  {% else %}
+    <div class="text-slate-400">ยังไม่มีรายการ</div>
+  {% endfor %}
+</div>
+{% endblock %}
