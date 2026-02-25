@@ -10,4 +10,5 @@ class TransactionForm(FlaskForm):
     amount = DecimalField("Amount", places=2, validators=[DataRequired(), NumberRange(min=0.01)])
     tx_date = DateField("Date", default=date.today, validators=[DataRequired()])
     category_id = SelectField("Category", coerce=int, validators=[Optional()])
+    category_name = StringField("Or new category", validators=[Optional(), Length(max=80)])
     note = StringField("Note", validators=[Optional(), Length(max=255)])

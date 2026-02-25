@@ -8,7 +8,7 @@
 
   <div>
     <label class="block mb-1">Type</label>
-    {{ form.type(class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800") }}
+    {{ form.type(id="tx-type", class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800") }}
   </div>
   <div>
     <label class="block mb-1">Amount</label>
@@ -18,9 +18,15 @@
     <label class="block mb-1">Date</label>
     {{ form.tx_date(class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800") }}
   </div>
-  <div>
+  <div id="category-select-wrap">
     <label class="block mb-1">Category</label>
-    {{ form.category_id(class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800") }}
+    {{ form.category_id(id="category-id", class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800") }}
+  </div>
+  <div>
+    <label class="block mb-1" id="category-name-label">Category name</label>
+    {{ form.category_name(id="category-name", class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800", placeholder="เช่น Food, Salary") }}
+    {% for e in form.category_name.errors %}<p class="text-red-300 text-sm">{{ e }}</p>{% endfor %}
+    <p class="text-slate-400 text-sm mt-1" id="category-name-help">สำหรับรายจ่าย: กรอกได้เมื่อเลือก "อื่นๆ (ระบุเอง)"</p>
   </div>
   <div>
     <label class="block mb-1">Note</label>
@@ -30,7 +36,41 @@
   <button class="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500">Save</button>
 </form>
 
-<p class="mt-4 text-slate-400 text-sm">
-  ถ้าอยากให้ dropdown category เปลี่ยนตาม type แบบ realtime: เพิ่ม JS ได้ (แต่ MVP เราขอทำแบบวิทย์ๆ: “ทำงานได้ก่อน สวยทีหลัง”)
-</p>
+<script>
+  (function () {
+    const txTypeSelect = document.getElementById("tx-type");
+    const categorySelectWrap = document.getElementById("category-select-wrap");
+    const categorySelect = document.getElementById("category-id");
+    const categoryNameInput = document.getElementById("category-name");
+    const categoryNameLabel = document.getElementById("category-name-label");
+    const categoryNameHelp = document.getElementById("category-name-help");
+    if (!txTypeSelect || !categorySelectWrap || !categorySelect || !categoryNameInput || !categoryNameLabel || !categoryNameHelp) return;
+
+    const OTHER_VALUE = "-1";
+
+    function updateCategoryUi() {
+      const isIncome = txTypeSelect.value === "income";
+      categorySelectWrap.style.display = isIncome ? "none" : "block";
+
+      if (isIncome) {
+        categoryNameInput.disabled = false;
+        categoryNameLabel.textContent = "Income category";
+        categoryNameHelp.textContent = "รายรับ: โปรดพิมพ์ระบุแหล่งรายรับ";
+        return;
+      }
+
+      const isOther = categorySelect.value === OTHER_VALUE;
+      categoryNameInput.disabled = !isOther;
+      categoryNameLabel.textContent = "Category name";
+      categoryNameHelp.textContent = "สำหรับรายจ่าย: กรอกได้เมื่อเลือก \"อื่นๆ (ระบุเอง)\"";
+      if (!isOther) {
+        categoryNameInput.value = "";
+      }
+    }
+
+    updateCategoryUi();
+    txTypeSelect.addEventListener("change", updateCategoryUi);
+    categorySelect.addEventListener("change", updateCategoryUi);
+  })();
+</script>
 {% endblock %}

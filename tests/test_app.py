@@ -141,6 +141,133 @@ class AppTestCase(unittest.TestCase):
         self.assertIn("Income", text)
         self.assertIn("Expense", text)
 
+    def test_transaction_can_use_typed_category_name(self):
+        user = self._create_user("catname@example.com", "password123", "CatName")
+        self._login("catname@example.com", "password123")
+
+        create_resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "expense",
+                "amount": "250.00",
+                "tx_date": "2026-02-25",
+                "category_id": "-1",
+                "category_name": "Food",
+                "note": "Lunch",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(create_resp.status_code, 200)
+
+        with self.app.app_context():
+            category = Category.query.filter_by(user_id=user.id, type="expense", name="Food").first()
+            self.assertIsNotNone(category)
+            tx = Transaction.query.filter_by(user_id=user.id, note="Lunch").first()
+            self.assertIsNotNone(tx)
+            self.assertEqual(tx.category_id, category.id)
+
+        create_again_resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "expense",
+                "amount": "100.00",
+                "tx_date": "2026-02-25",
+                "category_id": "-1",
+                "category_name": "Food",
+                "note": "Dinner",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(create_again_resp.status_code, 200)
+
+        with self.app.app_context():
+            self.assertEqual(
+                Category.query.filter_by(user_id=user.id, type="expense", name="Food").count(),
+                1,
+            )
+
+    def test_typed_category_requires_other_selection(self):
+        self._create_user("typedrule@example.com", "password123", "TypedRule")
+        self._login("typedrule@example.com", "password123")
+
+        resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "expense",
+                "amount": "50.00",
+                "tx_date": "2026-02-25",
+                "category_id": "-2",
+                "category_name": "Transport",
+                "note": "Bus",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("ให้เลือก &#39;อื่นๆ&#39; ก่อน", resp.get_data(as_text=True))
+
+    def test_other_selection_requires_typed_category_name(self):
+        self._create_user("otherrule@example.com", "password123", "OtherRule")
+        self._login("otherrule@example.com", "password123")
+
+        resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "expense",
+                "amount": "75.00",
+                "tx_date": "2026-02-25",
+                "category_id": "-1",
+                "category_name": "",
+                "note": "Taxi",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("โปรดกรอกชื่อหมวดหมู่เมื่อเลือก &#39;อื่นๆ&#39;", resp.get_data(as_text=True))
+
+    def test_income_requires_typed_category_name(self):
+        self._create_user("income-required@example.com", "password123", "IncomeReq")
+        self._login("income-required@example.com", "password123")
+
+        resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "income",
+                "amount": "1200.00",
+                "tx_date": "2026-02-25",
+                "category_id": "-2",
+                "category_name": "",
+                "note": "Salary",
+            },
+            follow_redirects=False,
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("โปรดระบุหมวดหมู่รายรับ", resp.get_data(as_text=True))
+
+    def test_income_uses_typed_category_name(self):
+        user = self._create_user("income-typed@example.com", "password123", "IncomeTyped")
+        self._login("income-typed@example.com", "password123")
+
+        resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "income",
+                "amount": "5000.00",
+                "tx_date": "2026-02-25",
+                "category_id": "-2",
+                "category_name": "โบนัส",
+                "note": "Bonus",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        with self.app.app_context():
+            category = Category.query.filter_by(user_id=user.id, type="income", name="โบนัส").first()
+            self.assertIsNotNone(category)
+            tx = Transaction.query.filter_by(user_id=user.id, type="income", note="Bonus").first()
+            self.assertIsNotNone(tx)
+            self.assertEqual(tx.category_id, category.id)
+
 
 if __name__ == "__main__":
     unittest.main()
