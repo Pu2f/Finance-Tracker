@@ -16,7 +16,7 @@
           <a class="text-slate-300 hover:text-white" href="{{ url_for('categories.index') }}">Categories</a>
           <a class="text-slate-300 hover:text-white" href="{{ url_for('auth.profile') }}">Profile</a>
           <form method="post" action="{{ url_for('auth.logout') }}">
-            {{ csrf_token() }}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700">Logout</button>
           </form>
         {% else %}
