@@ -1,27 +1,119 @@
 {% extends "base.html" %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<h1 class="text-2xl font-semibold mb-4">Dashboard</h1>
-
-<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-  <div class="p-4 rounded bg-slate-900 border border-slate-800">
-    <div class="text-slate-400 text-sm">Income</div>
-    <div class="text-2xl font-semibold text-emerald-300">{{ income_total }}</div>
-  </div>
-  <div class="p-4 rounded bg-slate-900 border border-slate-800">
-    <div class="text-slate-400 text-sm">Expense</div>
-    <div class="text-2xl font-semibold text-rose-300">{{ expense_total }}</div>
-  </div>
-  <div class="p-4 rounded bg-slate-900 border border-slate-800">
-    <div class="text-slate-400 text-sm">Balance</div>
-    <div class="text-2xl font-semibold {% if balance >= 0 %}text-emerald-300{% else %}text-rose-300{% endif %}">
-      {{ balance }}
-    </div>
+<div class="flex justify-between items-center mb-8">
+  <h1 class="text-2xl font-semibold text-white">แดชบอร์ดภาพรวม</h1>
+  <div class="flex space-x-3">
+    <a
+      class="flex items-center bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
+      href="{{ url_for('transactions.create', type='income') }}"
+    >
+      Add Income
+    </a>
+    <a
+      class="flex items-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
+      href="{{ url_for('transactions.create', type='expense') }}"
+    >
+      Add Expense
+    </a>
   </div>
 </div>
 
-<div class="mt-6 flex gap-2">
-  <a class="px-3 py-2 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('transactions.index') }}">View Transactions</a>
-  <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('transactions.create') }}">Add Transaction</a>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">ยอดเงินคงเหลือ</div>
+    <p class="text-3xl font-bold mt-4 {% if balance >= 0 %}text-emerald-300{% else %}text-rose-300{% endif %}">
+      ฿{{ "{:,.2f}".format(balance) }}
+    </p>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">รายรับทั้งหมด</div>
+    <p class="text-3xl font-bold text-emerald-300 mt-4">฿{{ "{:,.2f}".format(income_total) }}</p>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">รายจ่ายทั้งหมด</div>
+    <p class="text-3xl font-bold text-rose-300 mt-4">฿{{ "{:,.2f}".format(expense_total) }}</p>
+  </div>
+</div>
+
+<form
+  class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-8 flex flex-wrap gap-4 items-end"
+  method="get"
+  action="{{ url_for('transactions.index') }}"
+>
+  <div class="flex flex-col space-y-1.5 flex-1 min-w-[150px]">
+    <label class="text-xs text-slate-400">Type</label>
+    <select
+      name="type"
+      class="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md p-2.5 outline-none"
+    >
+      <option value="">All</option>
+      <option value="income">Income</option>
+      <option value="expense">Expense</option>
+    </select>
+  </div>
+  <div class="flex flex-col space-y-1.5 flex-1 min-w-[150px]">
+    <label class="text-xs text-slate-400">Start</label>
+    <input
+      type="date"
+      name="start"
+      class="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md p-2.5 outline-none"
+    >
+  </div>
+  <div class="flex flex-col space-y-1.5 flex-1 min-w-[150px]">
+    <label class="text-xs text-slate-400">End</label>
+    <input
+      type="date"
+      name="end"
+      class="w-full bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md p-2.5 outline-none"
+    >
+  </div>
+  <button class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-6 py-2.5 rounded-md text-sm transition-colors border border-slate-700">
+    Filter
+  </button>
+</form>
+
+<div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+  <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+    <h2 class="text-lg font-medium text-white">รายการล่าสุด</h2>
+    <a class="text-sm text-slate-300 hover:text-white" href="{{ url_for('transactions.index') }}">ดูทั้งหมด</a>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="w-full text-left border-collapse">
+      <thead>
+        <tr class="border-b border-slate-800 text-xs uppercase text-slate-400">
+          <th class="px-6 py-4 font-medium">วันที่</th>
+          <th class="px-6 py-4 font-medium">รายการ</th>
+          <th class="px-6 py-4 font-medium">หมวดหมู่</th>
+          <th class="px-6 py-4 font-medium text-right">จำนวนเงิน</th>
+          <th class="px-6 py-4 font-medium text-center">จัดการ</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-800">
+        {% for tx in latest_transactions %}
+          <tr class="hover:bg-slate-800/40 transition-colors">
+            <td class="px-6 py-4 text-sm text-slate-300 whitespace-nowrap">{{ tx.tx_date }}</td>
+            <td class="px-6 py-4 text-sm text-white font-medium">{{ tx.note or "ไม่ระบุรายการ" }}</td>
+            <td class="px-6 py-4 text-sm">
+              <span class="bg-slate-800 text-slate-300 py-1 px-3 rounded-full text-xs">
+                {{ tx.category.name if tx.category else "No category" }}
+              </span>
+            </td>
+            <td class="px-6 py-4 text-sm font-medium text-right whitespace-nowrap {% if tx.type == 'income' %}text-emerald-300{% else %}text-rose-300{% endif %}">
+              {% if tx.type == 'income' %}+{% else %}-{% endif %}{{ "{:,.2f}".format(tx.amount) }} ฿
+            </td>
+            <td class="px-6 py-4 text-center">
+              <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700 text-sm" href="{{ url_for('transactions.edit', tx_id=tx.id) }}">Edit</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5" class="px-6 py-12 text-center text-slate-400">ยังไม่มีรายการ</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

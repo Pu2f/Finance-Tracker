@@ -24,12 +24,19 @@ def dashboard():
         .scalar()
     )
     balance = income_total - expense_total
+    latest_transactions = (
+        Transaction.query.filter_by(user_id=current_user.id)
+        .order_by(Transaction.tx_date.desc(), Transaction.id.desc())
+        .limit(10)
+        .all()
+    )
 
     return render_template(
         "dashboard/index.html",
         income_total=income_total,
         expense_total=expense_total,
         balance=balance,
+        latest_transactions=latest_transactions,
     )
 
 

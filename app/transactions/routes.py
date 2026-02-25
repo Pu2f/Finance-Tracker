@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
 
 from . import tx_bp
 from .forms import TransactionForm
@@ -153,7 +154,26 @@ def index():
         q = q.filter(Transaction.tx_date <= end_d)
 
     transactions = q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).limit(200).all()
-    return render_template("transactions/index.html", transactions=transactions)
+
+    income_total = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(Transaction.user_id == current_user.id, Transaction.type == "income")
+        .scalar()
+    )
+    expense_total = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(Transaction.user_id == current_user.id, Transaction.type == "expense")
+        .scalar()
+    )
+    balance = income_total - expense_total
+
+    return render_template(
+        "transactions/index.html",
+        transactions=transactions,
+        income_total=income_total,
+        expense_total=expense_total,
+        balance=balance,
+    )
 
 
 @tx_bp.route("/new", methods=["GET", "POST"])
