@@ -1,13 +1,15 @@
 from flask import Flask
-from flask_login import current_user
 from flask import render_template
-from config import Config
+from config import get_config, validate_required_env
 
 from .extensions import csrf, db, login_manager, migrate
 from .models import User
 
 
-def create_app(config_object=Config):
+def create_app(config_object=None):
+    config_object = config_object or get_config()
+    validate_required_env(config_object)
+
     app = Flask(__name__)
     app.config.from_object(config_object)
 
