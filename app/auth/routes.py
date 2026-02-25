@@ -1,3 +1,5 @@
+from urllib.parse import urljoin, urlparse
+
 from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
@@ -5,6 +7,12 @@ from . import auth_bp
 from .forms import ChangePasswordForm, LoginForm, ProfileForm, RegisterForm
 from ..extensions import db
 from ..models import User
+
+
+def _is_safe_redirect_target(target: str) -> bool:
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ("http", "https") and ref_url.netloc == test_url.netloc
 
 
 @auth_bp.get("/register")
@@ -63,8 +71,10 @@ def login_post():
 
     login_user(user)
     flash("ล็อกอินสำเร็จ", "success")
-    next_url = request.args.get("next")
-    return redirect(next_url or url_for("dash.dashboard"))
+    next_url = request.args.get("next", type=str)
+    if next_url and _is_safe_redirect_target(next_url):
+        return redirect(next_url)
+    return redirect(url_for("dash.dashboard"))
 
 
 @auth_bp.post("/logout")

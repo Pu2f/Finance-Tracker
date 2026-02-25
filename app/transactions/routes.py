@@ -34,10 +34,17 @@ def index():
     def parse_date(s: str | None):
         if not s:
             return None
-        return datetime.strptime(s, "%Y-%m-%d").date()
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").date()
+        except ValueError:
+            return None
 
     start_d = parse_date(start)
     end_d = parse_date(end)
+    if start and start_d is None:
+        flash("รูปแบบวันที่เริ่มต้นไม่ถูกต้อง", "error")
+    if end and end_d is None:
+        flash("รูปแบบวันที่สิ้นสุดไม่ถูกต้อง", "error")
     if start_d:
         q = q.filter(Transaction.tx_date >= start_d)
     if end_d:
@@ -63,13 +70,26 @@ def create():
 
     if form.validate_on_submit():
         category_id = form.category_id.data or 0
+        selected_category_id = None
+        if category_id != 0:
+            category = Category.query.filter_by(
+                id=category_id,
+                user_id=current_user.id,
+                type=form.type.data,
+                is_active=True,
+            ).first()
+            if not category:
+                flash("หมวดหมู่ไม่ถูกต้อง", "error")
+                return render_template("transactions/form.html", form=form), 400
+            selected_category_id = category.id
+
         tx = Transaction(
             user_id=current_user.id,
             type=form.type.data,
             amount=form.amount.data,
             tx_date=form.tx_date.data or date.today(),
             note=(form.note.data or "").strip(),
-            category_id=category_id if category_id != 0 else None,
+            category_id=selected_category_id,
         )
         db.session.add(tx)
         db.session.commit()
@@ -89,11 +109,24 @@ def edit(tx_id: int):
 
     if form.validate_on_submit():
         category_id = form.category_id.data or 0
+        selected_category_id = None
+        if category_id != 0:
+            category = Category.query.filter_by(
+                id=category_id,
+                user_id=current_user.id,
+                type=form.type.data,
+                is_active=True,
+            ).first()
+            if not category:
+                flash("หมวดหมู่ไม่ถูกต้อง", "error")
+                return render_template("transactions/form.html", form=form), 400
+            selected_category_id = category.id
+
         tx.type = form.type.data
         tx.amount = form.amount.data
         tx.tx_date = form.tx_date.data
         tx.note = (form.note.data or "").strip()
-        tx.category_id = category_id if category_id != 0 else None
+        tx.category_id = selected_category_id
         db.session.commit()
         flash("แก้ไขรายการแล้ว", "success")
         return redirect(url_for("transactions.index"))

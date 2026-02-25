@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-4">Dashboard</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+  <div class="p-4 rounded bg-slate-900 border border-slate-800">
+    <div class="text-slate-400 text-sm">Income</div>
+    <div class="text-2xl font-semibold text-emerald-300">{{ income_total }}</div>
+  </div>
+  <div class="p-4 rounded bg-slate-900 border border-slate-800">
+    <div class="text-slate-400 text-sm">Expense</div>
+    <div class="text-2xl font-semibold text-rose-300">{{ expense_total }}</div>
+  </div>
+  <div class="p-4 rounded bg-slate-900 border border-slate-800">
+    <div class="text-slate-400 text-sm">Balance</div>
+    <div class="text-2xl font-semibold {% if balance >= 0 %}text-emerald-300{% else %}text-rose-300{% endif %}">
+      {{ balance }}
+    </div>
+  </div>
+</div>
+
+<div class="mt-6 flex gap-2">
+  <a class="px-3 py-2 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('transactions.index') }}">View Transactions</a>
+  <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('transactions.create') }}">Add Transaction</a>
+</div>
+{% endblock %}
