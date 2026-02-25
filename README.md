@@ -10,3 +10,10 @@
 - `DATABASE_URL`
 
 หาก `APP_ENV=production` แต่ไม่ได้ตั้งค่าตัวแปรที่จำเป็น แอปจะหยุดทำงานทันที (fail-fast)
+
+## Tests
+รันเทสทั้งหมดด้วย:
+
+```bash
+./venv/bin/python -m unittest discover -s tests -v
+```
