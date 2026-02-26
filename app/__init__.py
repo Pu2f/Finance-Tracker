@@ -27,9 +27,9 @@ def create_app(config_object=None):
 
     # register blueprints
     from .auth.routes import auth_bp
-    from .transactions.routes import tx_bp
-    from .categories.routes import cat_bp
-    from .dashboard.routes import dash_bp
+    from .main.transactions.routes import tx_bp
+    from .main.categories.routes import cat_bp
+    from .main.dashboard.routes import dash_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tx_bp)
@@ -40,4 +40,5 @@ def create_app(config_object=None):
     @app.get("/")
     def home():
         return render_template("home.html")
+
     return app

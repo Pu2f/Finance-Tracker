@@ -6,7 +6,9 @@ BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_DIR = BASE_DIR / "instance"
 INSTANCE_DIR.mkdir(exist_ok=True)
 
-DEFAULT_SQLITE_URI = f"sqlite:///{(INSTANCE_DIR / 'finance_tracker.sqlite3').as_posix()}"
+DEFAULT_SQLITE_URI = (
+    f"sqlite:///{(INSTANCE_DIR / 'finance_tracker.sqlite3').as_posix()}"
+)
 
 
 class BaseConfig:
@@ -31,11 +33,15 @@ class ProductionConfig(BaseConfig):
     REMEMBER_COOKIE_HTTPONLY = True
 
 
+CONFIGS = {
+    "development": DevelopmentConfig,
+    "production": ProductionConfig,
+}
+
+
 def get_config():
     env_name = os.getenv("APP_ENV", "development").strip().lower()
-    if env_name == "production":
-        return ProductionConfig
-    return DevelopmentConfig
+    return CONFIGS.get(env_name, DevelopmentConfig)
 
 
 def validate_required_env(config_class) -> None:

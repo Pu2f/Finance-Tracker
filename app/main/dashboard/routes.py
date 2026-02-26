@@ -6,8 +6,8 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from . import dash_bp
-from ..extensions import db
-from ..models import Category, Transaction
+from ...extensions import db
+from ...models import Category, Transaction
 
 
 @dash_bp.get("/")

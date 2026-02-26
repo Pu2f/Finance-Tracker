@@ -6,8 +6,8 @@ from sqlalchemy import func
 
 from . import tx_bp
 from .forms import TransactionForm
-from ..extensions import db
-from ..models import Category, Transaction
+from ...extensions import db
+from ...models import Category, Transaction
 
 CATEGORY_OTHER = -1
 PRESET_CATEGORY_CHOICES = [

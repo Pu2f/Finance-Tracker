@@ -3,8 +3,8 @@ from flask_login import current_user, login_required
 
 from . import cat_bp
 from .forms import CategoryForm
-from ..extensions import db
-from ..models import Category
+from ...extensions import db
+from ...models import Category
 
 
 @cat_bp.get("/")
