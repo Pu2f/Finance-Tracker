@@ -16,7 +16,6 @@
           <a class="text-slate-300 hover:text-white" href="{{ url_for('categories.index') }}">Categories</a>
           <a class="text-slate-300 hover:text-white" href="{{ url_for('budgets.index') }}">Budgets</a>
           <a class="text-slate-300 hover:text-white" href="{{ url_for('recurring.index') }}">Recurring</a>
-          <a class="text-slate-300 hover:text-white" href="{{ url_for('data.index') }}">Data</a>
           <a class="text-slate-300 hover:text-white" href="{{ url_for('auth.profile') }}">Profile</a>
           <form method="post" action="{{ url_for('auth.logout') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
