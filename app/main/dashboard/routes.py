@@ -6,7 +6,7 @@ from sqlalchemy import func
 
 from . import dash_bp
 from ...extensions import db
-from ...models import Category, Transaction
+from ...models import Category, Transaction, TransactionDeletion
 
 
 @dash_bp.get("/")
@@ -22,7 +22,9 @@ def category_pie():
     rows = (
         db.session.query(Category.name, func.coalesce(func.sum(Transaction.amount), 0))
         .join(Transaction, Transaction.category_id == Category.id)
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(Category.user_id == current_user.id, Category.type == tx_type)
+        .filter(TransactionDeletion.transaction_id.is_(None))
         .group_by(Category.name)
         .order_by(func.sum(Transaction.amount).desc())
         .all()
@@ -42,7 +44,11 @@ def monthly():
             Transaction.type,
             func.coalesce(func.sum(Transaction.amount), 0).label("total"),
         )
-        .filter(Transaction.user_id == current_user.id)
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .filter(
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+        )
         .group_by("ym", Transaction.type)
         .order_by("ym")
         .all()
