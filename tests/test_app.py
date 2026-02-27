@@ -472,6 +472,18 @@ class AppTestCase(unittest.TestCase):
                 Category.query.filter_by(user_id=user.id, type="income", name="Salary").first()
             )
 
+    def test_data_tools_page_render_for_authenticated_user(self):
+        self._create_user("data-tools@example.com", "password123", "DataTools")
+        self._login("data-tools@example.com", "password123")
+
+        resp = self.client.get("/data/")
+        text = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Data Tools", text)
+        self.assertIn("Export CSV", text)
+        self.assertIn("Import CSV", text)
+
 
 if __name__ == "__main__":
     unittest.main()
