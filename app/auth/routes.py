@@ -18,7 +18,7 @@ def _is_safe_redirect_target(target: str) -> bool:
 @auth_bp.get("/register")
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for("dash.dashboard"))
+        return redirect(url_for("transactions.index"))
     form = RegisterForm()
     return render_template("auth/register.html", form=form)
 
@@ -26,7 +26,7 @@ def register():
 @auth_bp.post("/register")
 def register_post():
     if current_user.is_authenticated:
-        return redirect(url_for("dash.dashboard"))
+        return redirect(url_for("transactions.index"))
 
     form = RegisterForm()
     if not form.validate_on_submit():
@@ -44,13 +44,13 @@ def register_post():
 
     login_user(user)
     flash("สมัครสมาชิกสำเร็จ", "success")
-    return redirect(url_for("dash.dashboard"))
+    return redirect(url_for("transactions.index"))
 
 
 @auth_bp.get("/login")
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("dash.dashboard"))
+        return redirect(url_for("transactions.index"))
     form = LoginForm()
     return render_template("auth/login.html", form=form)
 
@@ -58,7 +58,7 @@ def login():
 @auth_bp.post("/login")
 def login_post():
     if current_user.is_authenticated:
-        return redirect(url_for("dash.dashboard"))
+        return redirect(url_for("transactions.index"))
 
     form = LoginForm()
     if not form.validate_on_submit():
@@ -74,7 +74,7 @@ def login_post():
     next_url = request.args.get("next", type=str)
     if next_url and _is_safe_redirect_target(next_url):
         return redirect(next_url)
-    return redirect(url_for("dash.dashboard"))
+    return redirect(url_for("transactions.index"))
 
 
 @auth_bp.post("/logout")

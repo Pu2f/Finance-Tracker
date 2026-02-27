@@ -1,5 +1,6 @@
 import csv
 import io
+from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -16,7 +17,6 @@ from ...models import (
     Tag,
     Transaction,
     TransactionDeletion,
-    transaction_tag,
 )
 from ...services.recurring import run_due_recurring_transactions
 
@@ -163,30 +163,10 @@ def _next_month_start(month_start: date) -> date:
     return date(month_start.year, month_start.month + 1, 1)
 
 
-def _previous_month_start(month_start: date) -> date:
-    if month_start.month == 1:
-        return date(month_start.year - 1, 12, 1)
-    return date(month_start.year, month_start.month - 1, 1)
-
-
-def _monthly_deep_insights(user_id: int):
+def _daily_expense_insight(user_id: int):
     today = date.today()
     current_month_start = today.replace(day=1)
     current_month_end = _next_month_start(current_month_start)
-    previous_month_start = _previous_month_start(current_month_start)
-
-    current_income = (
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
-        .filter(
-            Transaction.user_id == user_id,
-            TransactionDeletion.transaction_id.is_(None),
-            Transaction.type == "income",
-            Transaction.tx_date >= current_month_start,
-            Transaction.tx_date < current_month_end,
-        )
-        .scalar()
-    )
     current_expense = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
         .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
@@ -199,85 +179,11 @@ def _monthly_deep_insights(user_id: int):
         )
         .scalar()
     )
-    previous_income = (
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
-        .filter(
-            Transaction.user_id == user_id,
-            TransactionDeletion.transaction_id.is_(None),
-            Transaction.type == "income",
-            Transaction.tx_date >= previous_month_start,
-            Transaction.tx_date < current_month_start,
-        )
-        .scalar()
-    )
-    previous_expense = (
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
-        .filter(
-            Transaction.user_id == user_id,
-            TransactionDeletion.transaction_id.is_(None),
-            Transaction.type == "expense",
-            Transaction.tx_date >= previous_month_start,
-            Transaction.tx_date < current_month_start,
-        )
-        .scalar()
-    )
-
-    top_expense_row = (
-        db.session.query(
-            Category.name,
-            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
-        )
-        .join(Transaction, Transaction.category_id == Category.id)
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
-        .filter(
-            Category.user_id == user_id,
-            TransactionDeletion.transaction_id.is_(None),
-            Transaction.type == "expense",
-            Transaction.tx_date >= current_month_start,
-            Transaction.tx_date < current_month_end,
-        )
-        .group_by(Category.name)
-        .order_by(func.sum(Transaction.amount).desc())
-        .first()
-    )
-    top_tag_row = (
-        db.session.query(
-            Tag.name,
-            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
-        )
-        .join(transaction_tag, transaction_tag.c.tag_id == Tag.id)
-        .join(Transaction, Transaction.id == transaction_tag.c.transaction_id)
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
-        .filter(
-            Tag.user_id == user_id,
-            TransactionDeletion.transaction_id.is_(None),
-            Transaction.type == "expense",
-            Transaction.tx_date >= current_month_start,
-            Transaction.tx_date < current_month_end,
-        )
-        .group_by(Tag.name)
-        .order_by(func.sum(Transaction.amount).desc())
-        .first()
-    )
-
     days_elapsed = max(1, (today - current_month_start).days + 1)
     avg_daily_expense = float(current_expense) / days_elapsed
 
     return {
-        "current_month_label": current_month_start.strftime("%Y-%m"),
-        "previous_month_label": previous_month_start.strftime("%Y-%m"),
-        "current_income": float(current_income),
-        "previous_income": float(previous_income),
-        "current_expense": float(current_expense),
-        "previous_expense": float(previous_expense),
-        "income_change": float(current_income) - float(previous_income),
-        "expense_change": float(current_expense) - float(previous_expense),
-        "top_expense_category_name": top_expense_row[0] if top_expense_row else "-",
-        "top_expense_category_total": float(top_expense_row[1]) if top_expense_row else 0.0,
-        "top_tag_name": top_tag_row[0] if top_tag_row else "-",
-        "top_tag_total": float(top_tag_row[1]) if top_tag_row else 0.0,
+        "month_label": current_month_start.strftime("%Y-%m"),
         "avg_daily_expense": avg_daily_expense,
         "days_elapsed": days_elapsed,
     }
@@ -424,7 +330,7 @@ def index():
     )
     balance = income_total - expense_total
     budget_progress, budget_month_label = _monthly_budget_progress(current_user.id)
-    insights = _monthly_deep_insights(current_user.id)
+    daily_expense_insight = _daily_expense_insight(current_user.id)
 
     return render_template(
         "transactions/index.html",
@@ -434,9 +340,62 @@ def index():
         balance=balance,
         budget_progress=budget_progress,
         budget_month_label=budget_month_label,
-        insights=insights,
+        daily_expense_insight=daily_expense_insight,
         can_undo_tx_id=can_undo_tx_id,
     )
+
+
+@tx_bp.get("/charts/category-pie")
+@login_required
+def category_pie():
+    tx_type = request.args.get("type", "expense")
+    rows = (
+        db.session.query(Category.name, func.coalesce(func.sum(Transaction.amount), 0))
+        .join(Transaction, Transaction.category_id == Category.id)
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .filter(
+            Category.user_id == current_user.id,
+            Category.type == tx_type,
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+        )
+        .group_by(Category.name)
+        .order_by(func.sum(Transaction.amount).desc())
+        .all()
+    )
+    labels = [name for name, _ in rows]
+    values = [float(total) for _, total in rows]
+    return {"labels": labels, "values": values}
+
+
+@tx_bp.get("/charts/monthly")
+@login_required
+def monthly():
+    rows = (
+        db.session.query(
+            func.strftime("%Y-%m", Transaction.tx_date).label("ym"),
+            Transaction.type,
+            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
+        )
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .filter(
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+        )
+        .group_by("ym", Transaction.type)
+        .order_by("ym")
+        .all()
+    )
+
+    data = defaultdict(lambda: {"income": 0.0, "expense": 0.0})
+    for ym, tx_type, total in rows:
+        key = tx_type.value if hasattr(tx_type, "value") else str(tx_type)
+        data[ym][key] = float(total)
+
+    labels = sorted(data.keys())
+    income = [data[m]["income"] for m in labels]
+    expense = [data[m]["expense"] for m in labels]
+    return {"labels": labels, "income": income, "expense": expense}
 
 
 @tx_bp.get("/export.csv")

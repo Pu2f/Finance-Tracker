@@ -12,31 +12,77 @@
   </div>
 </div>
 
-<div class="space-y-2">
-  {% for c in categories %}
-    <div class="p-3 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
-      <div>
-        <div class="font-semibold">{{ c.name }}</div>
-        <div class="text-slate-400 text-sm">{{ c.type.value|capitalize }}{% if not c.is_active %} (inactive){% endif %}</div>
-      </div>
-      <div class="flex gap-2">
-        <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('categories.edit', category_id=c.id) }}">Edit</a>
-        <form method="post" action="{{ url_for('categories.toggle_active', category_id=c.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {% if c.is_active %}
-            <button class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600">Disable</button>
-          {% else %}
-            <button class="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600">Enable</button>
-          {% endif %}
-        </form>
-        <form method="post" action="{{ url_for('categories.delete', category_id=c.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>
-        </form>
-      </div>
+<div class="space-y-6">
+  <section>
+    <h2 class="text-lg font-semibold mb-2 text-emerald-200">Income Categories</h2>
+    <div class="space-y-2">
+      {% set income = namespace(count=0) %}
+      {% for c in categories %}
+        {% if c.type.value == "income" %}
+          {% set income.count = income.count + 1 %}
+          <div class="p-3 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <div>
+              <div class="font-semibold">{{ c.name }}</div>
+              <div class="text-slate-400 text-sm">Income{% if not c.is_active %} (inactive){% endif %}</div>
+            </div>
+            <div class="flex gap-2">
+              <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('categories.edit', category_id=c.id) }}">Edit</a>
+              <form method="post" action="{{ url_for('categories.toggle_active', category_id=c.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if c.is_active %}
+                  <button class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600">Disable</button>
+                {% else %}
+                  <button class="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600">Enable</button>
+                {% endif %}
+              </form>
+              <form method="post" action="{{ url_for('categories.delete', category_id=c.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+      {% if income.count == 0 %}
+        <div class="text-slate-400">ยังไม่มีหมวดหมู่รายรับ</div>
+      {% endif %}
     </div>
-  {% else %}
-    <div class="text-slate-400">ยังไม่มีหมวดหมู่</div>
-  {% endfor %}
+  </section>
+
+  <section>
+    <h2 class="text-lg font-semibold mb-2 text-rose-200">Expense Categories</h2>
+    <div class="space-y-2">
+      {% set expense = namespace(count=0) %}
+      {% for c in categories %}
+        {% if c.type.value == "expense" %}
+          {% set expense.count = expense.count + 1 %}
+          <div class="p-3 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <div>
+              <div class="font-semibold">{{ c.name }}</div>
+              <div class="text-slate-400 text-sm">Expense{% if not c.is_active %} (inactive){% endif %}</div>
+            </div>
+            <div class="flex gap-2">
+              <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('categories.edit', category_id=c.id) }}">Edit</a>
+              <form method="post" action="{{ url_for('categories.toggle_active', category_id=c.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if c.is_active %}
+                  <button class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600">Disable</button>
+                {% else %}
+                  <button class="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600">Enable</button>
+                {% endif %}
+              </form>
+              <form method="post" action="{{ url_for('categories.delete', category_id=c.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+      {% endfor %}
+      {% if expense.count == 0 %}
+        <div class="text-slate-400">ยังไม่มีหมวดหมู่รายจ่าย</div>
+      {% endif %}
+    </div>
+  </section>
 </div>
 {% endblock %}

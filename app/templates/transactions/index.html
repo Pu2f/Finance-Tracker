@@ -2,7 +2,7 @@
 {% block title %}Transactions{% endblock %}
 {% block content %}
 <div class="flex justify-between items-center mb-8">
-  <h1 class="text-2xl font-semibold text-white">แดชบอร์ดภาพรวม</h1>
+  <h1 class="text-2xl font-semibold text-white">Transactions</h1>
   <div class="flex space-x-3">
     <a
       class="flex items-center bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
@@ -46,6 +46,21 @@
   </div>
 </div>
 
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-lg font-medium text-white mb-4">รายจ่ายตามหมวดหมู่</h2>
+    <div class="h-80">
+      <canvas id="category-pie-chart"></canvas>
+    </div>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-lg font-medium text-white mb-4">ภาพรวมรายเดือน</h2>
+    <div class="h-80">
+      <canvas id="monthly-chart"></canvas>
+    </div>
+  </div>
+</div>
+
 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-lg font-medium text-white">Budget เดือนนี้ ({{ budget_month_label }})</h2>
@@ -73,33 +88,11 @@
   </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-    <div class="text-sm font-medium text-slate-400">เดือนนี้ vs เดือนก่อน</div>
-    <p class="text-slate-300 text-sm mt-3">
-      {{ insights.current_month_label }} vs {{ insights.previous_month_label }}
-    </p>
-    <p class="text-sm mt-2 text-emerald-300">
-      รายรับ: ฿{{ "{:,.2f}".format(insights.current_income) }} ({{ "{:+,.2f}".format(insights.income_change) }})
-    </p>
-    <p class="text-sm mt-1 text-rose-300">
-      รายจ่าย: ฿{{ "{:,.2f}".format(insights.current_expense) }} ({{ "{:+,.2f}".format(insights.expense_change) }})
-    </p>
-  </div>
-  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-    <div class="text-sm font-medium text-slate-400">หมวดใช้จ่ายสูงสุด (เดือนนี้)</div>
-    <p class="text-2xl font-bold text-white mt-3">{{ insights.top_expense_category_name }}</p>
-    <p class="text-sm text-rose-300 mt-2">฿{{ "{:,.2f}".format(insights.top_expense_category_total) }}</p>
-  </div>
-  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-    <div class="text-sm font-medium text-slate-400">แท็กใช้จ่ายสูงสุด (เดือนนี้)</div>
-    <p class="text-2xl font-bold text-white mt-3">{{ insights.top_tag_name }}</p>
-    <p class="text-sm text-indigo-300 mt-2">฿{{ "{:,.2f}".format(insights.top_tag_total) }}</p>
-  </div>
+<div class="grid grid-cols-1 gap-6 mb-8">
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
     <div class="text-sm font-medium text-slate-400">ค่าเฉลี่ยรายวัน (รายจ่าย)</div>
-    <p class="text-2xl font-bold text-white mt-3">฿{{ "{:,.2f}".format(insights.avg_daily_expense) }}</p>
-    <p class="text-sm text-slate-400 mt-2">คำนวณจาก {{ insights.days_elapsed }} วันของเดือนนี้</p>
+    <p class="text-2xl font-bold text-white mt-3">฿{{ "{:,.2f}".format(daily_expense_insight.avg_daily_expense) }}</p>
+    <p class="text-sm text-slate-400 mt-2">คำนวณจาก {{ daily_expense_insight.days_elapsed }} วันในเดือน {{ daily_expense_insight.month_label }}</p>
   </div>
 </div>
 
@@ -179,4 +172,87 @@
     </table>
   </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    Chart.defaults.color = "#94a3b8";
+    Chart.defaults.borderColor = "rgba(255, 255, 255, 0.1)";
+
+    const pieElement = document.getElementById("category-pie-chart");
+    if (pieElement) {
+      const pieCtx = pieElement.getContext("2d");
+      fetch("{{ url_for('transactions.category_pie') }}?type=expense")
+        .then(res => res.json())
+        .then(data => {
+          if (!data.labels || data.labels.length === 0) {
+            pieCtx.canvas.parentNode.innerHTML = "<p class='text-slate-400 text-center'>ไม่มีข้อมูลรายจ่าย</p>";
+            return;
+          }
+          new Chart(pieCtx, {
+            type: "pie",
+            data: {
+              labels: data.labels,
+              datasets: [{
+                data: data.values,
+                backgroundColor: [
+                  "#be123c", "#e11d48", "#f43f5e", "#fb7185", "#fda4af",
+                  "#f87171", "#ef4444", "#dc2626", "#b91c1c", "#991b1b",
+                ],
+              }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "right",
+                  labels: { color: "#f1f5f9", boxWidth: 20 },
+                },
+              },
+            },
+          });
+        });
+    }
+
+    const barElement = document.getElementById("monthly-chart");
+    if (barElement) {
+      const barCtx = barElement.getContext("2d");
+      fetch("{{ url_for('transactions.monthly') }}")
+        .then(res => res.json())
+        .then(data => {
+          if (!data.labels || data.labels.length === 0) {
+            barCtx.canvas.parentNode.innerHTML = "<p class='text-slate-400 text-center'>ไม่มีข้อมูลธุรกรรม</p>";
+            return;
+          }
+          new Chart(barCtx, {
+            type: "bar",
+            data: {
+              labels: data.labels,
+              datasets: [
+                {
+                  label: "Income",
+                  data: data.income,
+                  backgroundColor: "#10b981",
+                },
+                {
+                  label: "Expense",
+                  data: data.expense,
+                  backgroundColor: "#f43f5e",
+                },
+              ],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.06)" } },
+                y: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.06)" } },
+              },
+            },
+          });
+        });
+    }
+  });
+</script>
 {% endblock %}
