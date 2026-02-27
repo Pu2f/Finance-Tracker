@@ -28,6 +28,20 @@ transaction_tag = db.Table(
 )
 
 
+class TransactionDeletion(db.Model):
+    transaction_id: Mapped[int] = mapped_column(
+        ForeignKey("transaction.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False, index=True
+    )
+    deleted_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, nullable=False, index=True
+    )
+
+    transaction: Mapped["Transaction"] = relationship(back_populates="deletion")
+
+
 class User(db.Model, UserMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(
@@ -131,6 +145,9 @@ class Transaction(db.Model):
 
     user: Mapped["User"] = relationship(back_populates="transactions")
     category: Mapped["Category | None"] = relationship(back_populates="transactions")
+    deletion: Mapped["TransactionDeletion | None"] = relationship(
+        back_populates="transaction", uselist=False, cascade="all, delete-orphan"
+    )
     tags: Mapped[list["Tag"]] = relationship(
         secondary=transaction_tag, back_populates="transactions"
     )
