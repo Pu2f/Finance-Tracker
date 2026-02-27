@@ -48,13 +48,31 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-    <h2 class="text-lg font-medium text-white mb-4">รายจ่ายตามหมวดหมู่</h2>
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h2 class="text-lg font-medium text-white">รายจ่ายตามหมวดหมู่</h2>
+      <select id="chart-range" class="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md px-3 py-2 outline-none">
+        <option value="day">วันนี้</option>
+        <option value="week">สัปดาห์นี้</option>
+        <option value="month" selected>เดือนนี้</option>
+        <option value="year">ปีนี้</option>
+        <option value="all">ทั้งหมด</option>
+      </select>
+    </div>
     <div class="h-80">
       <canvas id="category-pie-chart"></canvas>
     </div>
   </div>
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
-    <h2 class="text-lg font-medium text-white mb-4">ภาพรวมรายเดือน</h2>
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h2 class="text-lg font-medium text-white">ภาพรวมรายรับ-รายจ่าย</h2>
+      <select id="chart-range-secondary" class="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md px-3 py-2 outline-none">
+        <option value="day">วันนี้</option>
+        <option value="week">สัปดาห์นี้</option>
+        <option value="month" selected>เดือนนี้</option>
+        <option value="year">ปีนี้</option>
+        <option value="all">ทั้งหมด</option>
+      </select>
+    </div>
     <div class="h-80">
       <canvas id="monthly-chart"></canvas>
     </div>
@@ -102,19 +120,19 @@
     <a class="text-sm text-slate-300 hover:text-white" href="{{ url_for('savings.index') }}">View all goals</a>
   </div>
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4">
-      <div class="text-xs text-slate-400">Active goals</div>
-      <div class="text-2xl font-bold text-white mt-1">{{ savings_summary.active_count }}</div>
+    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4 pt-5">
+      <div class="text-xs text-slate-400 leading-relaxed">Active goals</div>
+      <div class="text-2xl font-bold text-white mt-2 leading-tight">{{ savings_summary.active_count }}</div>
     </div>
-    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4">
-      <div class="text-xs text-slate-400">Saved / Target</div>
-      <div class="text-lg font-semibold text-white mt-1">
+    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4 pt-5">
+      <div class="text-xs text-slate-400 leading-relaxed">Saved / Target</div>
+      <div class="text-lg font-semibold text-white mt-2 leading-tight">
         ฿{{ "{:,.2f}".format(savings_summary.total_saved) }} / ฿{{ "{:,.2f}".format(savings_summary.total_target) }}
       </div>
     </div>
-    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4">
-      <div class="text-xs text-slate-400">Total progress</div>
-      <div class="text-2xl font-bold text-indigo-300 mt-1">{{ "{:,.1f}".format(savings_summary.progress_pct) }}%</div>
+    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4 pt-5">
+      <div class="text-xs text-slate-400 leading-relaxed">Total progress</div>
+      <div class="text-2xl font-bold text-indigo-300 mt-2 leading-tight">{{ "{:,.1f}".format(savings_summary.progress_pct) }}%</div>
     </div>
   </div>
   <div class="space-y-2">
@@ -216,6 +234,30 @@
   document.addEventListener("DOMContentLoaded", () => {
     Chart.defaults.color = "#94a3b8";
     Chart.defaults.borderColor = "rgba(255, 255, 255, 0.1)";
+    const chartRangeSelect = document.getElementById("chart-range");
+    const chartRangeSecondarySelect = document.getElementById("chart-range-secondary");
+    let pieChart = null;
+    let barChart = null;
+
+    function showNoData(canvas, message) {
+      const parent = canvas.parentNode;
+      let msg = parent.querySelector(".chart-empty-msg");
+      if (!msg) {
+        msg = document.createElement("p");
+        msg.className = "chart-empty-msg text-slate-400 text-center";
+        parent.appendChild(msg);
+      }
+      msg.textContent = message;
+      msg.style.display = "block";
+      canvas.style.display = "none";
+    }
+
+    function clearNoData(canvas) {
+      const parent = canvas.parentNode;
+      const msg = parent.querySelector(".chart-empty-msg");
+      if (msg) msg.style.display = "none";
+      canvas.style.display = "block";
+    }
 
     function buildPieColors(count) {
       if (!count || count <= 0) return [];
@@ -227,17 +269,24 @@
       return colors;
     }
 
-    const pieElement = document.getElementById("category-pie-chart");
-    if (pieElement) {
+    function loadPieChart(rangeKey) {
+      const pieElement = document.getElementById("category-pie-chart");
+      if (!pieElement) return;
       const pieCtx = pieElement.getContext("2d");
-      fetch("{{ url_for('transactions.category_pie') }}?type=expense")
+      fetch(`{{ url_for('transactions.category_pie') }}?type=expense&range=${encodeURIComponent(rangeKey)}`)
         .then(res => res.json())
         .then(data => {
           if (!data.labels || data.labels.length === 0) {
-            pieCtx.canvas.parentNode.innerHTML = "<p class='text-slate-400 text-center'>ไม่มีข้อมูลรายจ่าย</p>";
+            if (pieChart) {
+              pieChart.destroy();
+              pieChart = null;
+            }
+            showNoData(pieCtx.canvas, "ไม่มีข้อมูลรายจ่าย");
             return;
           }
-          new Chart(pieCtx, {
+          clearNoData(pieCtx.canvas);
+          if (pieChart) pieChart.destroy();
+          pieChart = new Chart(pieCtx, {
             type: "pie",
             data: {
               labels: data.labels,
@@ -262,17 +311,24 @@
         });
     }
 
-    const barElement = document.getElementById("monthly-chart");
-    if (barElement) {
+    function loadMonthlyChart(rangeKey) {
+      const barElement = document.getElementById("monthly-chart");
+      if (!barElement) return;
       const barCtx = barElement.getContext("2d");
-      fetch("{{ url_for('transactions.monthly') }}")
+      fetch(`{{ url_for('transactions.monthly') }}?range=${encodeURIComponent(rangeKey)}`)
         .then(res => res.json())
         .then(data => {
           if (!data.labels || data.labels.length === 0) {
-            barCtx.canvas.parentNode.innerHTML = "<p class='text-slate-400 text-center'>ไม่มีข้อมูลธุรกรรม</p>";
+            if (barChart) {
+              barChart.destroy();
+              barChart = null;
+            }
+            showNoData(barCtx.canvas, "ไม่มีข้อมูลธุรกรรม");
             return;
           }
-          new Chart(barCtx, {
+          clearNoData(barCtx.canvas);
+          if (barChart) barChart.destroy();
+          barChart = new Chart(barCtx, {
             type: "bar",
             data: {
               labels: data.labels,
@@ -299,6 +355,32 @@
             },
           });
         });
+    }
+
+    const initialRange = chartRangeSelect ? chartRangeSelect.value : "month";
+    loadPieChart(initialRange);
+    loadMonthlyChart(initialRange);
+
+    function applyRangeSelection(selectedRange) {
+      if (chartRangeSelect && chartRangeSelect.value !== selectedRange) {
+        chartRangeSelect.value = selectedRange;
+      }
+      if (chartRangeSecondarySelect && chartRangeSecondarySelect.value !== selectedRange) {
+        chartRangeSecondarySelect.value = selectedRange;
+      }
+      loadPieChart(selectedRange);
+      loadMonthlyChart(selectedRange);
+    }
+
+    if (chartRangeSelect) {
+      chartRangeSelect.addEventListener("change", function () {
+        applyRangeSelection(chartRangeSelect.value || "month");
+      });
+    }
+    if (chartRangeSecondarySelect) {
+      chartRangeSecondarySelect.addEventListener("change", function () {
+        applyRangeSelection(chartRangeSecondarySelect.value || "month");
+      });
     }
   });
 </script>

@@ -1,7 +1,7 @@
 import csv
 import io
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from flask import Response, flash, redirect, render_template, request, url_for
@@ -162,6 +162,23 @@ def _next_month_start(month_start: date) -> date:
     if month_start.month == 12:
         return date(month_start.year + 1, 1, 1)
     return date(month_start.year, month_start.month + 1, 1)
+
+
+def _chart_range_bounds(range_key: str | None):
+    today = date.today()
+    key = (range_key or "month").strip().lower()
+    if key == "day":
+        return today, today + timedelta(days=1)
+    if key == "week":
+        week_start = today - timedelta(days=today.weekday())
+        return week_start, week_start + timedelta(days=7)
+    if key == "year":
+        return date(today.year, 1, 1), date(today.year + 1, 1, 1)
+    if key == "all":
+        return None, None
+    # default: current month
+    month_start = today.replace(day=1)
+    return month_start, _next_month_start(month_start)
 
 
 def _daily_expense_insight(user_id: int):
@@ -396,6 +413,7 @@ def index():
 @login_required
 def category_pie():
     tx_type = request.args.get("type", "expense")
+    range_start, range_end = _chart_range_bounds(request.args.get("range"))
     rows = (
         db.session.query(Category.name, func.coalesce(func.sum(Transaction.amount), 0))
         .join(Transaction, Transaction.category_id == Category.id)
@@ -405,6 +423,10 @@ def category_pie():
             Category.type == tx_type,
             Transaction.user_id == current_user.id,
             TransactionDeletion.transaction_id.is_(None),
+        )
+        .filter(
+            Transaction.tx_date >= range_start if range_start else True,
+            Transaction.tx_date < range_end if range_end else True,
         )
         .group_by(Category.name)
         .order_by(func.sum(Transaction.amount).desc())
@@ -418,6 +440,7 @@ def category_pie():
 @tx_bp.get("/charts/monthly")
 @login_required
 def monthly():
+    range_start, range_end = _chart_range_bounds(request.args.get("range"))
     rows = (
         db.session.query(
             func.strftime("%Y-%m", Transaction.tx_date).label("ym"),
@@ -428,6 +451,8 @@ def monthly():
         .filter(
             Transaction.user_id == current_user.id,
             TransactionDeletion.transaction_id.is_(None),
+            Transaction.tx_date >= range_start if range_start else True,
+            Transaction.tx_date < range_end if range_end else True,
         )
         .group_by("ym", Transaction.type)
         .order_by("ym")

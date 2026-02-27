@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --font-body-th: "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-display-th: "Kanit", "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+
+  html,
+  body {
+    font-family: var(--font-body-th);
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display-th);
+    letter-spacing: 0.01em;
+  }
+}
