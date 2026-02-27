@@ -7,7 +7,7 @@ from sqlalchemy import func
 from . import budget_bp
 from .forms import BudgetForm
 from ...extensions import db
-from ...models import Budget, Category, Transaction
+from ...models import Budget, Category, Transaction, TransactionDeletion
 
 
 def _month_start_from_str(value: str | None) -> date | None:
@@ -42,8 +42,10 @@ def _build_spent_by_category(user_id: int, month_start: date) -> dict[int, float
             Transaction.category_id,
             func.coalesce(func.sum(Transaction.amount), 0).label("spent"),
         )
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "expense",
             Transaction.category_id.isnot(None),
             Transaction.tx_date >= month_start,
