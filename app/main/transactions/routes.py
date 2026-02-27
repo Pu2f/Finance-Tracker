@@ -96,6 +96,101 @@ def _monthly_budget_progress(user_id: int):
     return budget_progress, month_start.strftime("%Y-%m")
 
 
+def _next_month_start(month_start: date) -> date:
+    if month_start.month == 12:
+        return date(month_start.year + 1, 1, 1)
+    return date(month_start.year, month_start.month + 1, 1)
+
+
+def _previous_month_start(month_start: date) -> date:
+    if month_start.month == 1:
+        return date(month_start.year - 1, 12, 1)
+    return date(month_start.year, month_start.month - 1, 1)
+
+
+def _monthly_deep_insights(user_id: int):
+    today = date.today()
+    current_month_start = today.replace(day=1)
+    current_month_end = _next_month_start(current_month_start)
+    previous_month_start = _previous_month_start(current_month_start)
+
+    current_income = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == "income",
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .scalar()
+    )
+    current_expense = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == "expense",
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .scalar()
+    )
+    previous_income = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == "income",
+            Transaction.tx_date >= previous_month_start,
+            Transaction.tx_date < current_month_start,
+        )
+        .scalar()
+    )
+    previous_expense = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .filter(
+            Transaction.user_id == user_id,
+            Transaction.type == "expense",
+            Transaction.tx_date >= previous_month_start,
+            Transaction.tx_date < current_month_start,
+        )
+        .scalar()
+    )
+
+    top_expense_row = (
+        db.session.query(
+            Category.name,
+            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
+        )
+        .join(Transaction, Transaction.category_id == Category.id)
+        .filter(
+            Category.user_id == user_id,
+            Transaction.type == "expense",
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .group_by(Category.name)
+        .order_by(func.sum(Transaction.amount).desc())
+        .first()
+    )
+
+    days_elapsed = max(1, (today - current_month_start).days + 1)
+    avg_daily_expense = float(current_expense) / days_elapsed
+
+    return {
+        "current_month_label": current_month_start.strftime("%Y-%m"),
+        "previous_month_label": previous_month_start.strftime("%Y-%m"),
+        "current_income": float(current_income),
+        "previous_income": float(previous_income),
+        "current_expense": float(current_expense),
+        "previous_expense": float(previous_expense),
+        "income_change": float(current_income) - float(previous_income),
+        "expense_change": float(current_expense) - float(previous_expense),
+        "top_expense_category_name": top_expense_row[0] if top_expense_row else "-",
+        "top_expense_category_total": float(top_expense_row[1]) if top_expense_row else 0.0,
+        "avg_daily_expense": avg_daily_expense,
+        "days_elapsed": days_elapsed,
+    }
+
+
 def _category_choices(user_id: int, tx_type: str):
     cats = (
         Category.query.filter_by(user_id=user_id, type=tx_type, is_active=True)
@@ -229,6 +324,7 @@ def index():
     )
     balance = income_total - expense_total
     budget_progress, budget_month_label = _monthly_budget_progress(current_user.id)
+    insights = _monthly_deep_insights(current_user.id)
 
     return render_template(
         "transactions/index.html",
@@ -238,6 +334,7 @@ def index():
         balance=balance,
         budget_progress=budget_progress,
         budget_month_label=budget_month_label,
+        insights=insights,
     )
 
 
