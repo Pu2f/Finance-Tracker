@@ -34,12 +34,14 @@ def create_app(config_object=None):
     from .main.categories.routes import cat_bp
     from .main.dashboard.routes import dash_bp
     from .main.budgets.routes import budget_bp
+    from .main.recurring.routes import recurring_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tx_bp)
     app.register_blueprint(cat_bp)
     app.register_blueprint(dash_bp)
     app.register_blueprint(budget_bp)
+    app.register_blueprint(recurring_bp)
 
     # simple home route
     @app.get("/")

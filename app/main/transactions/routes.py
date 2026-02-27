@@ -8,6 +8,7 @@ from . import tx_bp
 from .forms import TransactionForm
 from ...extensions import db
 from ...models import Category, Transaction
+from ...services.recurring import run_due_recurring_transactions
 
 CATEGORY_OTHER = -1
 PRESET_CATEGORY_CHOICES = [
@@ -124,6 +125,10 @@ def _resolve_category_id(form: TransactionForm) -> int | None:
 @tx_bp.get("/")
 @login_required
 def index():
+    created_count = run_due_recurring_transactions(current_user.id)
+    if created_count > 0:
+        flash(f"สร้างรายการอัตโนมัติ {created_count} รายการจาก recurring", "info")
+
     # filters
     tx_type = request.args.get("type")  # income|expense|None
     start = request.args.get("start")

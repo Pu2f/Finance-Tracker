@@ -1,18 +1,23 @@
 from collections import defaultdict
 from datetime import date
 
-from flask import jsonify, render_template, request
+from flask import flash, jsonify, render_template, request
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from . import dash_bp
 from ...extensions import db
 from ...models import Budget, Category, Transaction
+from ...services.recurring import run_due_recurring_transactions
 
 
 @dash_bp.get("/")
 @login_required
 def dashboard():
+    created_count = run_due_recurring_transactions(current_user.id)
+    if created_count > 0:
+        flash(f"สร้างรายการอัตโนมัติ {created_count} รายการจาก recurring", "info")
+
     income_total = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
         .filter(Transaction.user_id == current_user.id, Transaction.type == "income")

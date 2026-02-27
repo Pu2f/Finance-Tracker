@@ -82,8 +82,8 @@
                 {{ tx.category.name if tx.category else "No category" }}
               </span>
             </td>
-            <td class="px-6 py-4 text-sm font-medium text-right whitespace-nowrap {% if tx.type == 'income' %}text-emerald-300{% else %}text-rose-300{% endif %}">
-              {% if tx.type == 'income' %}+{% else %}-{% endif %}{{ "{:,.2f}".format(tx.amount) }} ฿
+            <td class="px-6 py-4 text-sm font-medium text-right whitespace-nowrap {% if tx.type.value == 'income' %}text-emerald-300{% else %}text-rose-300{% endif %}">
+              {% if tx.type.value == 'income' %}+{% else %}-{% endif %}{{ "{:,.2f}".format(tx.amount) }} ฿
             </td>
             <td class="px-6 py-4 text-center">
               <div class="flex gap-2 justify-center">

@@ -5,7 +5,7 @@ from datetime import date
 
 from app import create_app
 from app.extensions import db
-from app.models import Budget, Category, Transaction, User
+from app.models import Budget, Category, RecurringTransaction, Transaction, User
 
 
 class AppTestCase(unittest.TestCase):
@@ -336,6 +336,78 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("Budget เดือนนี้", text)
         self.assertIn("Travel", text)
+
+    def test_recurring_generates_transaction_and_does_not_duplicate_same_day(self):
+        user = self._create_user("recur@example.com", "password123", "RecurUser")
+        self._login("recur@example.com", "password123")
+
+        with self.app.app_context():
+            category = Category(user_id=user.id, name="Rent", type="expense", is_active=True)
+            db.session.add(category)
+            db.session.commit()
+            db.session.refresh(category)
+
+            recurring = RecurringTransaction(
+                user_id=user.id,
+                category_id=category.id,
+                type="expense",
+                amount=500.00,
+                note="Monthly rent",
+                frequency="monthly",
+                interval_count=1,
+                start_date=date.today(),
+                next_run_date=date.today(),
+                is_active=True,
+            )
+            db.session.add(recurring)
+            db.session.commit()
+
+        first_resp = self.client.get("/transactions/", follow_redirects=True)
+        self.assertEqual(first_resp.status_code, 200)
+        self.assertIn("สร้างรายการอัตโนมัติ", first_resp.get_data(as_text=True))
+
+        with self.app.app_context():
+            self.assertEqual(
+                Transaction.query.filter_by(user_id=user.id, note="Monthly rent").count(),
+                1,
+            )
+
+        second_resp = self.client.get("/transactions/", follow_redirects=True)
+        self.assertEqual(second_resp.status_code, 200)
+
+        with self.app.app_context():
+            self.assertEqual(
+                Transaction.query.filter_by(user_id=user.id, note="Monthly rent").count(),
+                1,
+            )
+
+    def test_recurring_permission_blocks_other_users_edit(self):
+        user_a = self._create_user("ra@example.com", "password123", "RecurA")
+        user_b = self._create_user("rb@example.com", "password123", "RecurB")
+
+        with self.app.app_context():
+            recurring_b = RecurringTransaction(
+                user_id=user_b.id,
+                category_id=None,
+                type="income",
+                amount=1000.00,
+                note="Salary",
+                frequency="monthly",
+                interval_count=1,
+                start_date=date.today(),
+                next_run_date=date.today(),
+                is_active=True,
+            )
+            db.session.add(recurring_b)
+            db.session.commit()
+            recurring_id = recurring_b.id
+
+        self._login("ra@example.com", "password123")
+        edit_resp = self.client.get(f"/recurring/{recurring_id}/edit")
+        self.assertEqual(edit_resp.status_code, 404)
+
+        delete_resp = self.client.post(f"/recurring/{recurring_id}/delete")
+        self.assertEqual(delete_resp.status_code, 404)
 
 
 if __name__ == "__main__":

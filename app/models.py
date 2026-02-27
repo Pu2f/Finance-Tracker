@@ -36,6 +36,9 @@ class User(db.Model, UserMixin):
     budgets: Mapped[list["Budget"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    recurring_transactions: Mapped[list["RecurringTransaction"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -71,6 +74,9 @@ class Category(db.Model):
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="category")
     budgets: Mapped[list["Budget"]] = relationship(
         back_populates="category", cascade="all, delete-orphan"
+    )
+    recurring_transactions: Mapped[list["RecurringTransaction"]] = relationship(
+        back_populates="category"
     )
 
     __table_args__ = (
@@ -131,3 +137,54 @@ class Budget(db.Model):
 
     user: Mapped["User"] = relationship(back_populates="budgets")
     category: Mapped["Category"] = relationship(back_populates="budgets")
+
+
+class RecurrenceFrequency(enum.Enum):
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+
+
+RECURRENCE_FREQUENCY_ENUM = Enum(
+    RecurrenceFrequency,
+    values_callable=lambda enum_cls: [member.value for member in enum_cls],
+    native_enum=False,
+)
+
+
+class RecurringTransaction(db.Model):
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_recurring_amount_positive"),
+        CheckConstraint("interval_count > 0", name="ck_recurring_interval_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False, index=True
+    )
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id", ondelete="SET NULL"), nullable=True
+    )
+
+    type: Mapped[TransactionType] = mapped_column(TRANSACTION_TYPE_ENUM, nullable=False)
+    amount: Mapped[Decimal] = mapped_column(db.Numeric(12, 2), nullable=False)
+    note: Mapped[str] = mapped_column(db.String(255), default="", nullable=False)
+
+    frequency: Mapped[RecurrenceFrequency] = mapped_column(
+        RECURRENCE_FREQUENCY_ENUM, nullable=False
+    )
+    interval_count: Mapped[int] = mapped_column(default=1, nullable=False)
+
+    start_date: Mapped[date] = mapped_column(nullable=False)
+    end_date: Mapped[date | None] = mapped_column(nullable=True)
+    next_run_date: Mapped[date] = mapped_column(nullable=False, index=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="recurring_transactions")
+    category: Mapped["Category | None"] = relationship(
+        back_populates="recurring_transactions"
+    )

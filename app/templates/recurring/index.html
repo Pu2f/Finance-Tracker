@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Recurring{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-2xl font-semibold">Recurring Transactions</h1>
+  <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('recurring.create') }}">New</a>
+</div>
+
+<div class="space-y-2">
+  {% for r in recurring_rows %}
+    <div class="p-4 rounded bg-slate-900 border border-slate-800">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="font-semibold text-white">{{ r.note or "Recurring item" }}</div>
+          <div class="text-slate-300 text-sm mt-1">
+            {{ r.type.value }} | {{ r.frequency.value }} every {{ r.interval_count }}
+          </div>
+          <div class="text-slate-400 text-sm">
+            Amount: ฿{{ "{:,.2f}".format(r.amount) }} | Next run: {{ r.next_run_date }}
+          </div>
+          <div class="text-slate-400 text-sm">
+            Category: {{ r.category.name if r.category else "No category" }}
+            {% if r.end_date %}| End: {{ r.end_date }}{% endif %}
+          </div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span class="text-xs px-2 py-1 rounded {% if r.is_active %}bg-emerald-800 text-emerald-200{% else %}bg-slate-800 text-slate-300{% endif %}">
+            {{ "active" if r.is_active else "paused" }}
+          </span>
+          <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('recurring.edit', recurring_id=r.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('recurring.toggle', recurring_id=r.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600">Toggle</button>
+          </form>
+          <form method="post" action="{{ url_for('recurring.delete', recurring_id=r.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  {% else %}
+    <div class="text-slate-400">ยังไม่มี recurring transactions</div>
+  {% endfor %}
+</div>
+{% endblock %}
