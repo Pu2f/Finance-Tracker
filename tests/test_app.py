@@ -1,3 +1,4 @@
+import io
 import os
 import tempfile
 import unittest
@@ -408,6 +409,68 @@ class AppTestCase(unittest.TestCase):
 
         delete_resp = self.client.post(f"/recurring/{recurring_id}/delete")
         self.assertEqual(delete_resp.status_code, 404)
+
+    def test_transactions_export_csv_returns_user_data(self):
+        user = self._create_user("csv-export@example.com", "password123", "CsvExport")
+        self._login("csv-export@example.com", "password123")
+
+        with self.app.app_context():
+            category = Category(user_id=user.id, name="Food", type="expense", is_active=True)
+            db.session.add(category)
+            db.session.commit()
+            db.session.refresh(category)
+
+            tx = Transaction(
+                user_id=user.id,
+                category_id=category.id,
+                type="expense",
+                amount=120.50,
+                tx_date=date(2026, 2, 26),
+                note="Lunch",
+            )
+            db.session.add(tx)
+            db.session.commit()
+
+        resp = self.client.get("/transactions/export.csv")
+        text = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("text/csv", resp.content_type)
+        self.assertIn("tx_date,type,amount,category,note", text)
+        self.assertIn("2026-02-26,expense,120.50,Food,Lunch", text)
+
+    def test_transactions_import_csv_creates_rows_and_skips_invalid(self):
+        user = self._create_user("csv-import@example.com", "password123", "CsvImport")
+        self._login("csv-import@example.com", "password123")
+
+        csv_content = (
+            "tx_date,type,amount,category,note\n"
+            "2026-02-20,expense,95.00,Transport,Taxi\n"
+            "bad-date,expense,30.00,Food,Invalid Date\n"
+            "2026-02-21,income,5000.00,Salary,Payday\n"
+        )
+        data = {
+            "csv_file": (io.BytesIO(csv_content.encode("utf-8")), "transactions.csv"),
+        }
+        resp = self.client.post(
+            "/transactions/import.csv",
+            data=data,
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        text = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("นำเข้า CSV สำเร็จ 2 รายการ, ข้าม 1 รายการ", text)
+
+        with self.app.app_context():
+            self.assertEqual(Transaction.query.filter_by(user_id=user.id).count(), 2)
+            self.assertIsNotNone(
+                Category.query.filter_by(user_id=user.id, type="expense", name="Transport").first()
+            )
+            self.assertIsNotNone(
+                Category.query.filter_by(user_id=user.id, type="income", name="Salary").first()
+            )
 
 
 if __name__ == "__main__":

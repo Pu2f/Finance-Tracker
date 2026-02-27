@@ -1,6 +1,9 @@
+import csv
+import io
 from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
-from flask import flash, redirect, render_template, request, url_for
+from flask import Response, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
@@ -19,6 +22,30 @@ PRESET_CATEGORY_CHOICES = [
     (-6, "ค่าไฟ"),
 ]
 PRESET_CATEGORY_NAME_BY_VALUE = {value: name for value, name in PRESET_CATEGORY_CHOICES}
+
+
+def _parse_date(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _build_filtered_query(user_id: int, tx_type: str | None, start: str | None, end: str | None):
+    q = Transaction.query.filter_by(user_id=user_id)
+    if tx_type in ("income", "expense"):
+        q = q.filter(Transaction.type == tx_type)
+
+    start_d = _parse_date(start)
+    end_d = _parse_date(end)
+    if start_d:
+        q = q.filter(Transaction.tx_date >= start_d)
+    if end_d:
+        q = q.filter(Transaction.tx_date <= end_d)
+
+    return q, start_d, end_d
 
 
 def _category_choices(user_id: int, tx_type: str):
@@ -134,29 +161,11 @@ def index():
     start = request.args.get("start")
     end = request.args.get("end")
 
-    q = Transaction.query.filter_by(user_id=current_user.id)
-
-    if tx_type in ("income", "expense"):
-        q = q.filter(Transaction.type == tx_type)
-
-    def parse_date(s: str | None):
-        if not s:
-            return None
-        try:
-            return datetime.strptime(s, "%Y-%m-%d").date()
-        except ValueError:
-            return None
-
-    start_d = parse_date(start)
-    end_d = parse_date(end)
+    q, start_d, end_d = _build_filtered_query(current_user.id, tx_type, start, end)
     if start and start_d is None:
         flash("รูปแบบวันที่เริ่มต้นไม่ถูกต้อง", "error")
     if end and end_d is None:
         flash("รูปแบบวันที่สิ้นสุดไม่ถูกต้อง", "error")
-    if start_d:
-        q = q.filter(Transaction.tx_date >= start_d)
-    if end_d:
-        q = q.filter(Transaction.tx_date <= end_d)
 
     transactions = q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).limit(200).all()
 
@@ -179,6 +188,116 @@ def index():
         expense_total=expense_total,
         balance=balance,
     )
+
+
+@tx_bp.get("/export.csv")
+@login_required
+def export_csv():
+    tx_type = request.args.get("type")
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    q, _, _ = _build_filtered_query(current_user.id, tx_type, start, end)
+    transactions = q.order_by(Transaction.tx_date.asc(), Transaction.id.asc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["tx_date", "type", "amount", "category", "note"])
+    for tx in transactions:
+        writer.writerow(
+            [
+                tx.tx_date.isoformat(),
+                tx.type.value,
+                f"{tx.amount:.2f}",
+                tx.category.name if tx.category else "",
+                tx.note or "",
+            ]
+        )
+
+    filename = f"transactions-{date.today().isoformat()}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@tx_bp.post("/import.csv")
+@login_required
+def import_csv():
+    file = request.files.get("csv_file")
+    if not file or not file.filename:
+        flash("โปรดเลือกไฟล์ CSV", "error")
+        return redirect(url_for("transactions.index"))
+
+    try:
+        content = file.stream.read().decode("utf-8-sig")
+    except Exception:
+        flash("อ่านไฟล์ไม่ได้ (ต้องเป็น UTF-8 CSV)", "error")
+        return redirect(url_for("transactions.index"))
+
+    reader = csv.DictReader(io.StringIO(content))
+    required_cols = {"tx_date", "type", "amount", "category", "note"}
+    if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
+        flash("คอลัมน์ CSV ไม่ถูกต้อง: ต้องมี tx_date,type,amount,category,note", "error")
+        return redirect(url_for("transactions.index"))
+
+    imported = 0
+    skipped = 0
+    for row in reader:
+        tx_date = _parse_date((row.get("tx_date") or "").strip())
+        tx_type = (row.get("type") or "").strip().lower()
+        note = (row.get("note") or "").strip()
+        category_name = (row.get("category") or "").strip()
+
+        try:
+            amount = Decimal((row.get("amount") or "").strip())
+        except (InvalidOperation, ValueError):
+            skipped += 1
+            continue
+
+        if not tx_date or tx_type not in ("income", "expense") or amount <= 0:
+            skipped += 1
+            continue
+
+        category_id = None
+        if category_name:
+            category = Category.query.filter_by(
+                user_id=current_user.id,
+                type=tx_type,
+                name=category_name,
+            ).first()
+            if not category:
+                category = Category(
+                    user_id=current_user.id,
+                    type=tx_type,
+                    name=category_name,
+                    is_active=True,
+                )
+                db.session.add(category)
+                db.session.flush()
+            elif not category.is_active:
+                category.is_active = True
+            category_id = category.id
+
+        tx = Transaction(
+            user_id=current_user.id,
+            type=tx_type,
+            amount=amount,
+            tx_date=tx_date,
+            category_id=category_id,
+            note=note,
+        )
+        db.session.add(tx)
+        imported += 1
+
+    if imported > 0:
+        db.session.commit()
+    else:
+        db.session.rollback()
+
+    flash(f"นำเข้า CSV สำเร็จ {imported} รายการ, ข้าม {skipped} รายการ", "info")
+    return redirect(url_for("transactions.index"))
 
 
 @tx_bp.route("/new", methods=["GET", "POST"])

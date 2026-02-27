@@ -1,4 +1,4 @@
-from flask import flash, redirect, render_template, url_for
+from flask import flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from . import cat_bp
@@ -22,11 +22,20 @@ def index():
 @login_required
 def create():
     form = CategoryForm()
+    forced_type = (request.values.get("force_type") or "").strip().lower()
+    if forced_type not in ("income", "expense"):
+        forced_type = ""
+
+    if request.method == "GET" and forced_type:
+        form.type.data = forced_type
+    if request.method == "POST" and forced_type:
+        form.type.data = forced_type
+
     if form.validate_on_submit():
         cat = Category(
             user_id=current_user.id,
             name=form.name.data.strip(),
-            type=form.type.data,
+            type=forced_type or form.type.data,
         )
         db.session.add(cat)
         try:
@@ -34,11 +43,11 @@ def create():
         except Exception:
             db.session.rollback()
             flash("เพิ่มหมวดหมู่ไม่สำเร็จ (อาจชื่อซ้ำ)", "error")
-            return render_template("categories/form.html", form=form), 400
+            return render_template("categories/form.html", form=form, forced_type=forced_type), 400
 
         flash("เพิ่มหมวดหมู่แล้ว", "success")
         return redirect(url_for("categories.index"))
-    return render_template("categories/form.html", form=form)
+    return render_template("categories/form.html", form=form, forced_type=forced_type)
 
 
 @cat_bp.route("/<int:category_id>/edit", methods=["GET", "POST"])

@@ -99,7 +99,7 @@ def create():
 
     if not form.category_id.choices:
         flash("ยังไม่มีหมวดหมู่รายจ่ายที่ใช้งานอยู่ โปรดสร้างหมวดหมู่ก่อน", "error")
-        return redirect(url_for("categories.create"))
+        return redirect(url_for("categories.create", force_type="expense"))
 
     if request.method == "GET":
         form.month.data = date.today().strftime("%Y-%m")
