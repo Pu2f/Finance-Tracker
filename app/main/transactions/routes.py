@@ -10,7 +10,14 @@ from sqlalchemy import func
 from . import tx_bp
 from .forms import TransactionForm
 from ...extensions import db
-from ...models import Budget, Category, Tag, Transaction, transaction_tag
+from ...models import (
+    Budget,
+    Category,
+    Tag,
+    Transaction,
+    TransactionDeletion,
+    transaction_tag,
+)
 from ...services.recurring import run_due_recurring_transactions
 
 CATEGORY_OTHER = -1
@@ -33,8 +40,20 @@ def _parse_date(value: str | None):
         return None
 
 
+def _active_transaction_query(user_id: int):
+    return (
+        Transaction.query.outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
+        )
+    )
+
+
 def _build_filtered_query(user_id: int, tx_type: str | None, start: str | None, end: str | None):
-    q = Transaction.query.filter_by(user_id=user_id)
+    q = _active_transaction_query(user_id)
     if tx_type in ("income", "expense"):
         q = q.filter(Transaction.type == tx_type)
 
@@ -108,8 +127,10 @@ def _monthly_budget_progress(user_id: int):
             Transaction.category_id,
             func.coalesce(func.sum(Transaction.amount), 0).label("spent"),
         )
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "expense",
             Transaction.category_id.isnot(None),
             Transaction.tx_date >= month_start,
@@ -158,8 +179,10 @@ def _monthly_deep_insights(user_id: int):
 
     current_income = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "income",
             Transaction.tx_date >= current_month_start,
             Transaction.tx_date < current_month_end,
@@ -168,8 +191,10 @@ def _monthly_deep_insights(user_id: int):
     )
     current_expense = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "expense",
             Transaction.tx_date >= current_month_start,
             Transaction.tx_date < current_month_end,
@@ -178,8 +203,10 @@ def _monthly_deep_insights(user_id: int):
     )
     previous_income = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "income",
             Transaction.tx_date >= previous_month_start,
             Transaction.tx_date < current_month_start,
@@ -188,8 +215,10 @@ def _monthly_deep_insights(user_id: int):
     )
     previous_expense = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "expense",
             Transaction.tx_date >= previous_month_start,
             Transaction.tx_date < current_month_start,
@@ -203,8 +232,10 @@ def _monthly_deep_insights(user_id: int):
             func.coalesce(func.sum(Transaction.amount), 0).label("total"),
         )
         .join(Transaction, Transaction.category_id == Category.id)
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Category.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "expense",
             Transaction.tx_date >= current_month_start,
             Transaction.tx_date < current_month_end,
@@ -220,8 +251,10 @@ def _monthly_deep_insights(user_id: int):
         )
         .join(transaction_tag, transaction_tag.c.tag_id == Tag.id)
         .join(Transaction, Transaction.id == transaction_tag.c.transaction_id)
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
         .filter(
             Tag.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
             Transaction.type == "expense",
             Transaction.tx_date >= current_month_start,
             Transaction.tx_date < current_month_end,
@@ -372,15 +405,33 @@ def index():
         flash("รูปแบบวันที่สิ้นสุดไม่ถูกต้อง", "error")
 
     transactions = q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).limit(200).all()
+    undo_tx_id = request.args.get("undo_tx_id", type=int)
+    can_undo_tx_id = None
+    if undo_tx_id:
+        deletion = TransactionDeletion.query.filter_by(
+            transaction_id=undo_tx_id, user_id=current_user.id
+        ).first()
+        if deletion:
+            can_undo_tx_id = undo_tx_id
 
     income_total = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.user_id == current_user.id, Transaction.type == "income")
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .filter(
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+            Transaction.type == "income",
+        )
         .scalar()
     )
     expense_total = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.user_id == current_user.id, Transaction.type == "expense")
+        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .filter(
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+            Transaction.type == "expense",
+        )
         .scalar()
     )
     balance = income_total - expense_total
@@ -396,6 +447,7 @@ def index():
         budget_progress=budget_progress,
         budget_month_label=budget_month_label,
         insights=insights,
+        can_undo_tx_id=can_undo_tx_id,
     )
 
 
@@ -563,7 +615,17 @@ def create():
 @tx_bp.route("/<int:tx_id>/edit", methods=["GET", "POST"])
 @login_required
 def edit(tx_id: int):
-    tx = Transaction.query.filter_by(id=tx_id, user_id=current_user.id).first_or_404()
+    tx = (
+        Transaction.query.outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Transaction.id == tx_id,
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+        )
+        .first_or_404()
+    )
     form = TransactionForm(obj=tx)
 
     form.category_id.choices = _category_choices(current_user.id, form.type.data)
@@ -612,8 +674,32 @@ def edit(tx_id: int):
 @tx_bp.post("/<int:tx_id>/delete")
 @login_required
 def delete(tx_id: int):
-    tx = Transaction.query.filter_by(id=tx_id, user_id=current_user.id).first_or_404()
-    db.session.delete(tx)
+    tx = (
+        Transaction.query.outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Transaction.id == tx_id,
+            Transaction.user_id == current_user.id,
+            TransactionDeletion.transaction_id.is_(None),
+        )
+        .first_or_404()
+    )
+    db.session.add(
+        TransactionDeletion(transaction_id=tx.id, user_id=current_user.id)
+    )
     db.session.commit()
-    flash("ลบรายการแล้ว", "info")
+    flash("ลบรายการแล้ว (กู้คืนได้)", "info")
+    return redirect(url_for("transactions.index", undo_tx_id=tx.id))
+
+
+@tx_bp.post("/<int:tx_id>/undo-delete")
+@login_required
+def undo_delete(tx_id: int):
+    deletion = TransactionDeletion.query.filter_by(
+        transaction_id=tx_id, user_id=current_user.id
+    ).first_or_404()
+    db.session.delete(deletion)
+    db.session.commit()
+    flash("กู้คืนรายการแล้ว", "success")
     return redirect(url_for("transactions.index"))
