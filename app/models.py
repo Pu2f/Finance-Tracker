@@ -33,6 +33,9 @@ class User(db.Model, UserMixin):
     transactions: Mapped[list["Transaction"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    budgets: Mapped[list["Budget"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -46,6 +49,13 @@ class TransactionType(enum.Enum):
     EXPENSE = "expense"
 
 
+TRANSACTION_TYPE_ENUM = Enum(
+    TransactionType,
+    values_callable=lambda enum_cls: [member.value for member in enum_cls],
+    native_enum=False,
+)
+
+
 class Category(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
@@ -53,12 +63,15 @@ class Category(db.Model):
     )
 
     name: Mapped[str] = mapped_column(db.String(80), nullable=False)
-    type: Mapped[TransactionType] = mapped_column(Enum(TransactionType), nullable=False)
+    type: Mapped[TransactionType] = mapped_column(TRANSACTION_TYPE_ENUM, nullable=False)
 
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="categories")
     transactions: Mapped[list["Transaction"]] = relationship(back_populates="category")
+    budgets: Mapped[list["Budget"]] = relationship(
+        back_populates="category", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         db.UniqueConstraint(
@@ -78,7 +91,7 @@ class Transaction(db.Model):
         ForeignKey("category.id", ondelete="SET NULL"), nullable=True
     )
 
-    type: Mapped[TransactionType] = mapped_column(Enum(TransactionType), nullable=False)
+    type: Mapped[TransactionType] = mapped_column(TRANSACTION_TYPE_ENUM, nullable=False)
     amount: Mapped[Decimal] = mapped_column(db.Numeric(12, 2), nullable=False)
 
     tx_date: Mapped[date] = mapped_column(nullable=False, default=date.today)
@@ -90,3 +103,31 @@ class Transaction(db.Model):
 
     user: Mapped["User"] = relationship(back_populates="transactions")
     category: Mapped["Category | None"] = relationship(back_populates="transactions")
+
+
+class Budget(db.Model):
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id",
+            "category_id",
+            "month_start",
+            name="uq_budget_user_category_month",
+        ),
+        CheckConstraint("amount > 0", name="ck_budget_amount_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False, index=True
+    )
+    category_id: Mapped[int] = mapped_column(
+        ForeignKey("category.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    month_start: Mapped[date] = mapped_column(nullable=False, index=True)
+    amount: Mapped[Decimal] = mapped_column(db.Numeric(12, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="budgets")
+    category: Mapped["Category"] = relationship(back_populates="budgets")

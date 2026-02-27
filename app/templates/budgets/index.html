@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Budgets{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <h1 class="text-2xl font-semibold">Budgets</h1>
+  <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('budgets.create') }}">New</a>
+</div>
+
+<form method="get" class="mb-4 max-w-xs">
+  <label class="block mb-1 text-sm text-slate-300">Month</label>
+  <input
+    type="month"
+    name="month"
+    value="{{ month_value }}"
+    class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800"
+  >
+  <button class="mt-2 px-3 py-2 rounded bg-slate-800 hover:bg-slate-700">Filter</button>
+</form>
+
+<div class="space-y-2">
+  {% for row in budget_rows %}
+    <div class="p-4 rounded bg-slate-900 border border-slate-800">
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <div class="font-semibold">{{ row.budget.category.name }}</div>
+          <div class="text-slate-400 text-sm">งบ ฿{{ "{:,.2f}".format(row.budget.amount) }} | ใช้ไป ฿{{ "{:,.2f}".format(row.spent) }}</div>
+        </div>
+        <div class="flex gap-2">
+          <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('budgets.edit', budget_id=row.budget.id) }}">Edit</a>
+          <form method="post" action="{{ url_for('budgets.delete', budget_id=row.budget.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>
+          </form>
+        </div>
+      </div>
+      <div class="mt-3">
+        <div class="h-2 rounded bg-slate-800 overflow-hidden">
+          <div
+            class="h-full {% if row.is_over %}bg-rose-500{% else %}bg-emerald-500{% endif %}"
+            style="width: {{ [row.progress, 100]|min }}%;"
+          ></div>
+        </div>
+        <p class="mt-2 text-sm {% if row.is_over %}text-rose-300{% else %}text-slate-300{% endif %}">
+          {% if row.is_over %}
+            เกินงบ {{ "{:,.2f}".format(row.spent - row.budget.amount) }} บาท
+          {% else %}
+            เหลือ {{ "{:,.2f}".format(row.remaining) }} บาท
+          {% endif %}
+        </p>
+      </div>
+    </div>
+  {% else %}
+    <div class="text-slate-400">ยังไม่มีงบประมาณของเดือนนี้</div>
+  {% endfor %}
+</div>
+{% endblock %}

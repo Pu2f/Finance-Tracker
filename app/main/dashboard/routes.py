@@ -7,7 +7,7 @@ from sqlalchemy import func
 
 from . import dash_bp
 from ...extensions import db
-from ...models import Category, Transaction
+from ...models import Budget, Category, Transaction
 
 
 @dash_bp.get("/")
@@ -30,6 +30,48 @@ def dashboard():
         .limit(10)
         .all()
     )
+    month_start = date.today().replace(day=1)
+    if month_start.month == 12:
+        month_end = date(month_start.year + 1, 1, 1)
+    else:
+        month_end = date(month_start.year, month_start.month + 1, 1)
+
+    budgets = (
+        Budget.query.filter_by(user_id=current_user.id, month_start=month_start)
+        .join(Category, Budget.category_id == Category.id)
+        .order_by(Category.name.asc())
+        .all()
+    )
+    spent_rows = (
+        db.session.query(
+            Transaction.category_id,
+            func.coalesce(func.sum(Transaction.amount), 0).label("spent"),
+        )
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.type == "expense",
+            Transaction.category_id.isnot(None),
+            Transaction.tx_date >= month_start,
+            Transaction.tx_date < month_end,
+        )
+        .group_by(Transaction.category_id)
+        .all()
+    )
+    spent_by_category = {int(category_id): float(spent) for category_id, spent in spent_rows if category_id}
+
+    budget_progress = []
+    for budget in budgets:
+        spent = spent_by_category.get(budget.category_id, 0.0)
+        amount = float(budget.amount)
+        budget_progress.append(
+            {
+                "budget": budget,
+                "spent": spent,
+                "remaining": amount - spent,
+                "progress_pct": 0.0 if amount == 0 else min((spent / amount) * 100, 999.0),
+                "is_over": spent > amount,
+            }
+        )
 
     return render_template(
         "dashboard/index.html",
@@ -37,6 +79,8 @@ def dashboard():
         expense_total=expense_total,
         balance=balance,
         latest_transactions=latest_transactions,
+        budget_progress=budget_progress,
+        budget_month_label=month_start.strftime("%Y-%m"),
     )
 
 

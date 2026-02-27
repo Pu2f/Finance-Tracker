@@ -1,10 +1,11 @@
 import os
 import tempfile
 import unittest
+from datetime import date
 
 from app import create_app
 from app.extensions import db
-from app.models import Category, Transaction, User
+from app.models import Budget, Category, Transaction, User
 
 
 class AppTestCase(unittest.TestCase):
@@ -267,6 +268,74 @@ class AppTestCase(unittest.TestCase):
             tx = Transaction.query.filter_by(user_id=user.id, type="income", note="Bonus").first()
             self.assertIsNotNone(tx)
             self.assertEqual(tx.category_id, category.id)
+
+    def test_budget_create_and_prevent_duplicate_in_same_month(self):
+        user = self._create_user("budget@example.com", "password123", "BudgetUser")
+        self._login("budget@example.com", "password123")
+
+        with self.app.app_context():
+            category = Category(user_id=user.id, name="Food", type="expense", is_active=True)
+            db.session.add(category)
+            db.session.commit()
+            db.session.refresh(category)
+            category_id = category.id
+
+        create_resp = self.client.post(
+            "/budgets/new",
+            data={"category_id": str(category_id), "month": "2026-02", "amount": "4000.00"},
+            follow_redirects=True,
+        )
+        self.assertEqual(create_resp.status_code, 200)
+        self.assertIn("เพิ่มงบประมาณแล้ว", create_resp.get_data(as_text=True))
+
+        dup_resp = self.client.post(
+            "/budgets/new",
+            data={"category_id": str(category_id), "month": "2026-02", "amount": "4500.00"},
+            follow_redirects=False,
+        )
+        self.assertEqual(dup_resp.status_code, 400)
+        self.assertIn("อาจมีงบหมวดนี้ในเดือนนี้แล้ว", dup_resp.get_data(as_text=True))
+
+        with self.app.app_context():
+            self.assertEqual(
+                Budget.query.filter_by(user_id=user.id, category_id=category_id).count(), 1
+            )
+
+    def test_dashboard_shows_budget_progress(self):
+        user = self._create_user("budgetdash@example.com", "password123", "BudgetDash")
+        self._login("budgetdash@example.com", "password123")
+
+        with self.app.app_context():
+            category = Category(user_id=user.id, name="Travel", type="expense", is_active=True)
+            db.session.add(category)
+            db.session.commit()
+            db.session.refresh(category)
+
+            budget = Budget(
+                user_id=user.id,
+                category_id=category.id,
+                month_start=date(2026, 2, 1),
+                amount=1000.00,
+            )
+            db.session.add(budget)
+
+            tx = Transaction(
+                user_id=user.id,
+                category_id=category.id,
+                type="expense",
+                amount=250.00,
+                tx_date=date(2026, 2, 10),
+                note="Train",
+            )
+            db.session.add(tx)
+            db.session.commit()
+
+        resp = self.client.get("/dashboard/")
+        text = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Budget เดือนนี้", text)
+        self.assertIn("Travel", text)
 
 
 if __name__ == "__main__":

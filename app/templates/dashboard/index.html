@@ -36,6 +36,33 @@
   </div>
 </div>
 
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-medium text-white">Budget เดือนนี้ ({{ budget_month_label }})</h2>
+    <a class="text-sm text-slate-300 hover:text-white" href="{{ url_for('budgets.index', month=budget_month_label) }}">จัดการงบ</a>
+  </div>
+  <div class="space-y-3">
+    {% for row in budget_progress %}
+      <div>
+        <div class="flex items-center justify-between text-sm mb-1">
+          <span class="text-slate-200">{{ row.budget.category.name }}</span>
+          <span class="{% if row.is_over %}text-rose-300{% else %}text-slate-300{% endif %}">
+            ฿{{ "{:,.2f}".format(row.spent) }} / ฿{{ "{:,.2f}".format(row.budget.amount) }}
+          </span>
+        </div>
+        <div class="h-2 rounded bg-slate-800 overflow-hidden">
+          <div
+            class="h-full {% if row.is_over %}bg-rose-500{% else %}bg-emerald-500{% endif %}"
+            style="width: {{ [row.progress_pct, 100]|min }}%;"
+          ></div>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-slate-400 text-sm">ยังไม่ได้ตั้งงบของเดือนนี้</p>
+    {% endfor %}
+  </div>
+</div>
+
 <form
   class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-8 flex flex-wrap gap-4 items-end"
   method="get"

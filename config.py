@@ -6,9 +6,12 @@ BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_DIR = BASE_DIR / "instance"
 INSTANCE_DIR.mkdir(exist_ok=True)
 
-DEFAULT_SQLITE_URI = (
-    f"sqlite:///{(INSTANCE_DIR / 'finance_tracker.sqlite3').as_posix()}"
+DEFAULT_SQLITE_PATH = (
+    INSTANCE_DIR / "finance_tracker.db"
+    if (INSTANCE_DIR / "finance_tracker.db").exists()
+    else (INSTANCE_DIR / "finance_tracker.sqlite3")
 )
+DEFAULT_SQLITE_URI = f"sqlite:///{DEFAULT_SQLITE_PATH.as_posix()}"
 
 
 class BaseConfig:
@@ -18,6 +21,7 @@ class BaseConfig:
 class DevelopmentConfig(BaseConfig):
     ENV_NAME = "development"
     DEBUG = True
+    AUTO_CREATE_TABLES = True
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-me")
     SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", DEFAULT_SQLITE_URI)
 
