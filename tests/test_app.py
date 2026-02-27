@@ -135,11 +135,11 @@ class AppTestCase(unittest.TestCase):
         self._create_user("dash@example.com", "password123", "DashUser")
         self._login("dash@example.com", "password123")
 
-        resp = self.client.get("/dashboard/")
+        resp = self.client.get("/dashboard/", follow_redirects=True)
         text = resp.get_data(as_text=True)
 
         self.assertEqual(resp.status_code, 200)
-        self.assertIn("Dashboard", text)
+        self.assertIn("แดชบอร์ดภาพรวม", text)
         self.assertIn("Income", text)
         self.assertIn("Expense", text)
 
@@ -331,7 +331,7 @@ class AppTestCase(unittest.TestCase):
             db.session.add(tx)
             db.session.commit()
 
-        resp = self.client.get("/dashboard/")
+        resp = self.client.get("/transactions/")
         text = resp.get_data(as_text=True)
 
         self.assertEqual(resp.status_code, 200)

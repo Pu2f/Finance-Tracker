@@ -1,92 +1,18 @@
 from collections import defaultdict
-from datetime import date
 
-from flask import flash, jsonify, render_template, request
+from flask import jsonify, redirect, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from . import dash_bp
 from ...extensions import db
-from ...models import Budget, Category, Transaction
-from ...services.recurring import run_due_recurring_transactions
+from ...models import Category, Transaction
 
 
 @dash_bp.get("/")
 @login_required
 def dashboard():
-    created_count = run_due_recurring_transactions(current_user.id)
-    if created_count > 0:
-        flash(f"สร้างรายการอัตโนมัติ {created_count} รายการจาก recurring", "info")
-
-    income_total = (
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.user_id == current_user.id, Transaction.type == "income")
-        .scalar()
-    )
-    expense_total = (
-        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .filter(Transaction.user_id == current_user.id, Transaction.type == "expense")
-        .scalar()
-    )
-    balance = income_total - expense_total
-    latest_transactions = (
-        Transaction.query.filter_by(user_id=current_user.id)
-        .order_by(Transaction.tx_date.desc(), Transaction.id.desc())
-        .limit(10)
-        .all()
-    )
-    month_start = date.today().replace(day=1)
-    if month_start.month == 12:
-        month_end = date(month_start.year + 1, 1, 1)
-    else:
-        month_end = date(month_start.year, month_start.month + 1, 1)
-
-    budgets = (
-        Budget.query.filter_by(user_id=current_user.id, month_start=month_start)
-        .join(Category, Budget.category_id == Category.id)
-        .order_by(Category.name.asc())
-        .all()
-    )
-    spent_rows = (
-        db.session.query(
-            Transaction.category_id,
-            func.coalesce(func.sum(Transaction.amount), 0).label("spent"),
-        )
-        .filter(
-            Transaction.user_id == current_user.id,
-            Transaction.type == "expense",
-            Transaction.category_id.isnot(None),
-            Transaction.tx_date >= month_start,
-            Transaction.tx_date < month_end,
-        )
-        .group_by(Transaction.category_id)
-        .all()
-    )
-    spent_by_category = {int(category_id): float(spent) for category_id, spent in spent_rows if category_id}
-
-    budget_progress = []
-    for budget in budgets:
-        spent = spent_by_category.get(budget.category_id, 0.0)
-        amount = float(budget.amount)
-        budget_progress.append(
-            {
-                "budget": budget,
-                "spent": spent,
-                "remaining": amount - spent,
-                "progress_pct": 0.0 if amount == 0 else min((spent / amount) * 100, 999.0),
-                "is_over": spent > amount,
-            }
-        )
-
-    return render_template(
-        "dashboard/index.html",
-        income_total=income_total,
-        expense_total=expense_total,
-        balance=balance,
-        latest_transactions=latest_transactions,
-        budget_progress=budget_progress,
-        budget_month_label=month_start.strftime("%Y-%m"),
-    )
+    return redirect(url_for("transactions.index"))
 
 
 @dash_bp.get("/charts/category-pie")
