@@ -3,7 +3,13 @@
 {% block content %}
 <div class="flex items-center justify-between mb-4">
   <h1 class="text-2xl font-semibold">Categories</h1>
-  <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('categories.create') }}">New</a>
+  <div class="flex items-center gap-2">
+    <form method="post" action="{{ url_for('categories.seed_defaults') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="px-3 py-2 rounded bg-slate-700 hover:bg-slate-600">Add defaults</button>
+    </form>
+    <a class="px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-500" href="{{ url_for('categories.create') }}">New</a>
+  </div>
 </div>
 
 <div class="space-y-2">
@@ -11,10 +17,18 @@
     <div class="p-3 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
       <div>
         <div class="font-semibold">{{ c.name }}</div>
-        <div class="text-slate-400 text-sm">{{ c.type }}{% if not c.is_active %} (inactive){% endif %}</div>
+        <div class="text-slate-400 text-sm">{{ c.type.value|capitalize }}{% if not c.is_active %} (inactive){% endif %}</div>
       </div>
       <div class="flex gap-2">
         <a class="px-3 py-1 rounded bg-slate-800 hover:bg-slate-700" href="{{ url_for('categories.edit', category_id=c.id) }}">Edit</a>
+        <form method="post" action="{{ url_for('categories.toggle_active', category_id=c.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {% if c.is_active %}
+            <button class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600">Disable</button>
+          {% else %}
+            <button class="px-3 py-1 rounded bg-emerald-700 hover:bg-emerald-600">Enable</button>
+          {% endif %}
+        </form>
         <form method="post" action="{{ url_for('categories.delete', category_id=c.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="px-3 py-1 rounded bg-rose-700 hover:bg-rose-600">Delete</button>

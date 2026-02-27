@@ -26,7 +26,7 @@
     <label class="block mb-1" id="category-name-label">Category name</label>
     {{ form.category_name(id="category-name", class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800", placeholder="เช่น Food, Salary") }}
     {% for e in form.category_name.errors %}<p class="text-red-300 text-sm">{{ e }}</p>{% endfor %}
-    <p class="text-slate-400 text-sm mt-1" id="category-name-help">สำหรับรายจ่าย: กรอกได้เมื่อเลือก "อื่นๆ (ระบุเอง)"</p>
+    <p class="text-slate-400 text-sm mt-1" id="category-name-help">กรอกได้เมื่อเลือก "อื่นๆ (ระบุเอง)"</p>
   </div>
   <div>
     <label class="block mb-1">Note</label>
@@ -44,30 +44,19 @@
 <script>
   (function () {
     const txTypeSelect = document.getElementById("tx-type");
-    const categorySelectWrap = document.getElementById("category-select-wrap");
     const categorySelect = document.getElementById("category-id");
     const categoryNameInput = document.getElementById("category-name");
     const categoryNameLabel = document.getElementById("category-name-label");
     const categoryNameHelp = document.getElementById("category-name-help");
-    if (!txTypeSelect || !categorySelectWrap || !categorySelect || !categoryNameInput || !categoryNameLabel || !categoryNameHelp) return;
+    if (!txTypeSelect || !categorySelect || !categoryNameInput || !categoryNameLabel || !categoryNameHelp) return;
 
     const OTHER_VALUE = "-1";
 
     function updateCategoryUi() {
-      const isIncome = txTypeSelect.value === "income";
-      categorySelectWrap.style.display = isIncome ? "none" : "block";
-
-      if (isIncome) {
-        categoryNameInput.disabled = false;
-        categoryNameLabel.textContent = "Income category";
-        categoryNameHelp.textContent = "รายรับ: โปรดพิมพ์ระบุแหล่งรายรับ";
-        return;
-      }
-
       const isOther = categorySelect.value === OTHER_VALUE;
       categoryNameInput.disabled = !isOther;
       categoryNameLabel.textContent = "Category name";
-      categoryNameHelp.textContent = "สำหรับรายจ่าย: กรอกได้เมื่อเลือก \"อื่นๆ (ระบุเอง)\"";
+      categoryNameHelp.textContent = "กรอกได้เมื่อเลือก \"อื่นๆ (ระบุเอง)\"";
       if (!isOther) {
         categoryNameInput.value = "";
       }

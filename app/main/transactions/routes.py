@@ -24,11 +24,9 @@ CATEGORY_OTHER = -1
 PRESET_CATEGORY_CHOICES = [
     (-2, "ค่าอาหาร"),
     (-3, "ค่าเดินทาง"),
-    (-4, "ค่าที่พัก"),
-    (-5, "ค่าน้ำ"),
-    (-6, "ค่าไฟ"),
 ]
 PRESET_CATEGORY_NAME_BY_VALUE = {value: name for value, name in PRESET_CATEGORY_CHOICES}
+LEGACY_HIDDEN_EXPENSE_CATEGORIES = {"ค่าที่พัก", "ค่าน้ำ", "ค่าไฟ"}
 
 
 def _parse_date(value: str | None):
@@ -291,41 +289,24 @@ def _category_choices(user_id: int, tx_type: str):
         .order_by(Category.name.asc())
         .all()
     )
-    preset_names = set(PRESET_CATEGORY_NAME_BY_VALUE.values())
-    dynamic_cats = [c for c in cats if c.name not in preset_names]
-    return (
-        [(CATEGORY_OTHER, "อื่นๆ (ระบุเอง)")]
-        + PRESET_CATEGORY_CHOICES
-        + [(c.id, c.name) for c in dynamic_cats]
-    )
+    if tx_type == "expense":
+        preset_names = set(PRESET_CATEGORY_NAME_BY_VALUE.values())
+        dynamic_cats = [
+            c
+            for c in cats
+            if c.name not in preset_names and c.name not in LEGACY_HIDDEN_EXPENSE_CATEGORIES
+        ]
+        return (
+            [(CATEGORY_OTHER, "อื่นๆ (ระบุเอง)")]
+            + PRESET_CATEGORY_CHOICES
+            + [(c.id, c.name) for c in dynamic_cats]
+        )
+    return [(CATEGORY_OTHER, "อื่นๆ (ระบุเอง)")] + [(c.id, c.name) for c in cats]
 
 
 def _resolve_category_id(form: TransactionForm) -> int | None:
     category_id = form.category_id.data
     typed_name = (form.category_name.data or "").strip()
-
-    if form.type.data == "income":
-        if not typed_name:
-            return -4
-        category = Category.query.filter_by(
-            user_id=current_user.id,
-            type="income",
-            name=typed_name,
-        ).first()
-        if category:
-            if not category.is_active:
-                category.is_active = True
-            return category.id
-
-        new_category = Category(
-            user_id=current_user.id,
-            name=typed_name,
-            type="income",
-            is_active=True,
-        )
-        db.session.add(new_category)
-        db.session.flush()
-        return new_category.id
 
     if category_id == CATEGORY_OTHER:
         if not typed_name:
@@ -590,9 +571,6 @@ def create():
         if selected_category_id == -3:
             flash("หากต้องการพิมพ์หมวดหมู่เอง ให้เลือก 'อื่นๆ' ก่อน", "error")
             return render_template("transactions/form.html", form=form), 400
-        if selected_category_id == -4:
-            flash("โปรดระบุหมวดหมู่รายรับ", "error")
-            return render_template("transactions/form.html", form=form), 400
 
         tx = Transaction(
             user_id=current_user.id,
@@ -641,9 +619,6 @@ def edit(tx_id: int):
         if selected_category_id == -3:
             flash("หากต้องการพิมพ์หมวดหมู่เอง ให้เลือก 'อื่นๆ' ก่อน", "error")
             return render_template("transactions/form.html", form=form), 400
-        if selected_category_id == -4:
-            flash("โปรดระบุหมวดหมู่รายรับ", "error")
-            return render_template("transactions/form.html", form=form), 400
 
         tx.type = form.type.data
         tx.amount = form.amount.data
@@ -656,16 +631,19 @@ def edit(tx_id: int):
         return redirect(url_for("transactions.index"))
 
     # preload select/input
-    if request.method == "GET" and tx.type == "income" and tx.category:
-        form.category_name.data = tx.category.name
-        form.category_id.data = CATEGORY_OTHER
-    elif tx.category and tx.category.name in PRESET_CATEGORY_NAME_BY_VALUE.values():
-        for value, name in PRESET_CATEGORY_CHOICES:
-            if name == tx.category.name:
-                form.category_id.data = value
-                break
-    else:
-        form.category_id.data = tx.category_id or CATEGORY_OTHER
+    if request.method == "GET":
+        choice_ids = {value for value, _ in form.category_id.choices}
+        if tx.category_id in choice_ids:
+            form.category_id.data = tx.category_id
+        elif tx.category and tx.category.name in PRESET_CATEGORY_NAME_BY_VALUE.values():
+            for value, name in PRESET_CATEGORY_CHOICES:
+                if name == tx.category.name:
+                    form.category_id.data = value
+                    break
+        else:
+            form.category_id.data = CATEGORY_OTHER
+            if tx.category:
+                form.category_name.data = tx.category.name
     if request.method == "GET":
         form.tags.data = ", ".join(tag.name for tag in sorted(tx.tags, key=lambda t: t.name))
     return render_template("transactions/form.html", form=form)

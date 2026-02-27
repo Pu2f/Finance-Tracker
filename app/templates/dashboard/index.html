@@ -36,6 +36,21 @@
   </div>
 </div>
 
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-lg font-medium text-white mb-4">รายจ่ายตามหมวดหมู่</h2>
+    <div class="h-80">
+      <canvas id="category-pie-chart"></canvas>
+    </div>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <h2 class="text-lg font-medium text-white mb-4">ภาพรวมรายเดือน</h2>
+    <div class="h-80">
+      <canvas id="monthly-chart"></canvas>
+    </div>
+  </div>
+</div>
+
 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
   <div class="flex items-center justify-between mb-4">
     <h2 class="text-lg font-medium text-white">Budget เดือนนี้ ({{ budget_month_label }})</h2>
@@ -144,3 +159,95 @@
   </div>
 </div>
 {% endblock %}
+{% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // Default styles for charts
+    Chart.defaults.color = "#94a3b8"; // slate-400
+    Chart.defaults.borderColor = "rgba(255, 255, 255, 0.1)";
+
+    // Category Pie Chart
+    const pieCtx = document.getElementById("category-pie-chart").getContext("2d");
+    fetch("{{ url_for('dash.category_pie') }}?type=expense")
+      .then(res => res.json())
+      .then(data => {
+        if (data.labels.length === 0) {
+          pieCtx.canvas.parentNode.innerHTML = "<p class='text-slate-400 text-center'>ไม่มีข้อมูลรายจ่าย</p>";
+          return;
+        }
+        new Chart(pieCtx, {
+          type: "pie",
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: "Expenses",
+              data: data.values,
+              backgroundColor: [
+                '#be123c', '#e11d48', '#f43f5e', '#fb7185', '#fda4af',
+                '#f87171', '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
+              ]
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "right",
+                labels: {
+                  color: '#f1f5f9', // slate-100
+                  boxWidth: 20
+                }
+              }
+            }
+          }
+        });
+      });
+
+    // Monthly Bar Chart
+    const barCtx = document.getElementById("monthly-chart").getContext("2d");
+    fetch("{{ url_for('dash.monthly') }}")
+      .then(res => res.json())
+      .then(data => {
+        if (data.labels.length === 0) {
+          barCtx.canvas.parentNode.innerHTML = "<p class='text-slate-400 text-center'>ไม่มีข้อมูลธุรกรรม</p>";
+          return;
+        }
+        new Chart(barCtx, {
+          type: "bar",
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: "Income",
+              data: data.income,
+              backgroundColor: "rgba(16, 185, 129, 0.5)", // Emerald-500
+              borderColor: "rgb(16, 185, 129)",
+              borderWidth: 1
+            }, {
+              label: "Expense",
+              data: data.expense,
+              backgroundColor: "rgba(244, 63, 94, 0.5)", // Rose-500
+              borderColor: "rgb(244, 63, 94)",
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: { beginAtZero: true },
+            },
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#f1f5f9'
+                }
+              }
+            }
+          }
+        });
+      });
+  });
+</script>
+{% endblock %}
+
