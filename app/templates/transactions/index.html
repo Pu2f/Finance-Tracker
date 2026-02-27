@@ -69,7 +69,7 @@
   </div>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
     <div class="text-sm font-medium text-slate-400">เดือนนี้ vs เดือนก่อน</div>
     <p class="text-slate-300 text-sm mt-3">
@@ -86,6 +86,11 @@
     <div class="text-sm font-medium text-slate-400">หมวดใช้จ่ายสูงสุด (เดือนนี้)</div>
     <p class="text-2xl font-bold text-white mt-3">{{ insights.top_expense_category_name }}</p>
     <p class="text-sm text-rose-300 mt-2">฿{{ "{:,.2f}".format(insights.top_expense_category_total) }}</p>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">แท็กใช้จ่ายสูงสุด (เดือนนี้)</div>
+    <p class="text-2xl font-bold text-white mt-3">{{ insights.top_tag_name }}</p>
+    <p class="text-sm text-indigo-300 mt-2">฿{{ "{:,.2f}".format(insights.top_tag_total) }}</p>
   </div>
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
     <div class="text-sm font-medium text-slate-400">ค่าเฉลี่ยรายวัน (รายจ่าย)</div>
@@ -126,6 +131,7 @@
           <th class="px-6 py-4 font-medium">วันที่</th>
           <th class="px-6 py-4 font-medium">รายการ</th>
           <th class="px-6 py-4 font-medium">หมวดหมู่</th>
+          <th class="px-6 py-4 font-medium">แท็ก</th>
           <th class="px-6 py-4 font-medium text-right">จำนวนเงิน</th>
           <th class="px-6 py-4 font-medium text-center">จัดการ</th>
         </tr>
@@ -139,6 +145,13 @@
               <span class="bg-slate-800 text-slate-300 py-1 px-3 rounded-full text-xs">
                 {{ tx.category.name if tx.category else "No category" }}
               </span>
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-300">
+              {% for tag in tx.tags %}
+                <span class="inline-block bg-indigo-900/60 text-indigo-200 py-1 px-2 rounded-full text-xs mr-1 mb-1">{{ tag.name }}</span>
+              {% else %}
+                <span class="text-slate-500">-</span>
+              {% endfor %}
             </td>
             <td class="px-6 py-4 text-sm font-medium text-right whitespace-nowrap {% if tx.type.value == 'income' %}text-emerald-300{% else %}text-rose-300{% endif %}">
               {% if tx.type.value == 'income' %}+{% else %}-{% endif %}{{ "{:,.2f}".format(tx.amount) }} ฿
@@ -155,7 +168,7 @@
           </tr>
         {% else %}
           <tr>
-            <td colspan="5" class="px-6 py-12 text-center text-slate-400">ยังไม่มีรายการ</td>
+            <td colspan="6" class="px-6 py-12 text-center text-slate-400">ยังไม่มีรายการ</td>
           </tr>
         {% endfor %}
       </tbody>

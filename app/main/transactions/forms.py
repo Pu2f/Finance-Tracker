@@ -11,4 +11,5 @@ class TransactionForm(FlaskForm):
     tx_date = DateField("Date", default=date.today, validators=[DataRequired()])
     category_id = SelectField("Category", coerce=int, validators=[Optional()])
     category_name = StringField("Or new category", validators=[Optional(), Length(max=80)])
+    tags = StringField("Tags", validators=[Optional(), Length(max=255)])
     note = StringField("Note", validators=[Optional(), Length(max=255)])

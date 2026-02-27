@@ -32,6 +32,11 @@
     <label class="block mb-1">Note</label>
     {{ form.note(class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800") }}
   </div>
+  <div>
+    <label class="block mb-1">Tags</label>
+    {{ form.tags(class="w-full px-3 py-2 rounded bg-slate-900 border border-slate-800", placeholder="งาน, ส่วนตัว, ท่องเที่ยว") }}
+    <p class="text-slate-400 text-sm mt-1">คั่นแท็กด้วย comma เช่น งาน, ส่วนตัว</p>
+  </div>
 
   <button class="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500">Save</button>
 </form>

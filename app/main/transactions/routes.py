@@ -10,7 +10,7 @@ from sqlalchemy import func
 from . import tx_bp
 from .forms import TransactionForm
 from ...extensions import db
-from ...models import Budget, Category, Transaction
+from ...models import Budget, Category, Tag, Transaction, transaction_tag
 from ...services.recurring import run_due_recurring_transactions
 
 CATEGORY_OTHER = -1
@@ -46,6 +46,48 @@ def _build_filtered_query(user_id: int, tx_type: str | None, start: str | None, 
         q = q.filter(Transaction.tx_date <= end_d)
 
     return q, start_d, end_d
+
+
+def _normalize_tag_names(raw_tags: str | None) -> list[str]:
+    if not raw_tags:
+        return []
+    normalized = []
+    seen = set()
+    for raw in raw_tags.replace(";", ",").split(","):
+        tag = raw.strip().lower()
+        if not tag:
+            continue
+        if len(tag) > 50:
+            tag = tag[:50]
+        if tag in seen:
+            continue
+        seen.add(tag)
+        normalized.append(tag)
+    return normalized
+
+
+def _sync_transaction_tags(tx: Transaction, raw_tags: str | None):
+    tag_names = _normalize_tag_names(raw_tags)
+    if not tag_names:
+        tx.tags = []
+        return
+
+    existing_tags = (
+        Tag.query.filter(Tag.user_id == tx.user_id, Tag.name.in_(tag_names)).all()
+    )
+    existing_by_name = {tag.name: tag for tag in existing_tags}
+
+    resolved_tags = []
+    for name in tag_names:
+        tag = existing_by_name.get(name)
+        if tag is None:
+            tag = Tag(user_id=tx.user_id, name=name)
+            db.session.add(tag)
+            db.session.flush()
+            existing_by_name[name] = tag
+        resolved_tags.append(tag)
+
+    tx.tags = resolved_tags
 
 
 def _monthly_budget_progress(user_id: int):
@@ -171,6 +213,23 @@ def _monthly_deep_insights(user_id: int):
         .order_by(func.sum(Transaction.amount).desc())
         .first()
     )
+    top_tag_row = (
+        db.session.query(
+            Tag.name,
+            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
+        )
+        .join(transaction_tag, transaction_tag.c.tag_id == Tag.id)
+        .join(Transaction, Transaction.id == transaction_tag.c.transaction_id)
+        .filter(
+            Tag.user_id == user_id,
+            Transaction.type == "expense",
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .group_by(Tag.name)
+        .order_by(func.sum(Transaction.amount).desc())
+        .first()
+    )
 
     days_elapsed = max(1, (today - current_month_start).days + 1)
     avg_daily_expense = float(current_expense) / days_elapsed
@@ -186,6 +245,8 @@ def _monthly_deep_insights(user_id: int):
         "expense_change": float(current_expense) - float(previous_expense),
         "top_expense_category_name": top_expense_row[0] if top_expense_row else "-",
         "top_expense_category_total": float(top_expense_row[1]) if top_expense_row else 0.0,
+        "top_tag_name": top_tag_row[0] if top_tag_row else "-",
+        "top_tag_total": float(top_tag_row[1]) if top_tag_row else 0.0,
         "avg_daily_expense": avg_daily_expense,
         "days_elapsed": days_elapsed,
     }
@@ -350,7 +411,7 @@ def export_csv():
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["tx_date", "type", "amount", "category", "note"])
+    writer.writerow(["tx_date", "type", "amount", "category", "note", "tags"])
     for tx in transactions:
         writer.writerow(
             [
@@ -359,6 +420,7 @@ def export_csv():
                 f"{tx.amount:.2f}",
                 tx.category.name if tx.category else "",
                 tx.note or "",
+                ",".join(tag.name for tag in sorted(tx.tags, key=lambda t: t.name)),
             ]
         )
 
@@ -397,6 +459,7 @@ def import_csv():
         tx_type = (row.get("type") or "").strip().lower()
         note = (row.get("note") or "").strip()
         category_name = (row.get("category") or "").strip()
+        tags_text = (row.get("tags") or "").strip()
 
         try:
             amount = Decimal((row.get("amount") or "").strip())
@@ -437,6 +500,8 @@ def import_csv():
             note=note,
         )
         db.session.add(tx)
+        db.session.flush()
+        _sync_transaction_tags(tx, tags_text)
         imported += 1
 
     if imported > 0:
@@ -486,6 +551,8 @@ def create():
             category_id=selected_category_id,
         )
         db.session.add(tx)
+        db.session.flush()
+        _sync_transaction_tags(tx, form.tags.data)
         db.session.commit()
         flash("เพิ่มรายการแล้ว", "success")
         return redirect(url_for("transactions.index"))
@@ -521,6 +588,7 @@ def edit(tx_id: int):
         tx.tx_date = form.tx_date.data
         tx.note = (form.note.data or "").strip()
         tx.category_id = selected_category_id
+        _sync_transaction_tags(tx, form.tags.data)
         db.session.commit()
         flash("แก้ไขรายการแล้ว", "success")
         return redirect(url_for("transactions.index"))
@@ -536,6 +604,8 @@ def edit(tx_id: int):
                 break
     else:
         form.category_id.data = tx.category_id or CATEGORY_OTHER
+    if request.method == "GET":
+        form.tags.data = ", ".join(tag.name for tag in sorted(tx.tags, key=lambda t: t.name))
     return render_template("transactions/form.html", form=form)
 
 

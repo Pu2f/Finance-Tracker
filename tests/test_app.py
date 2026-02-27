@@ -6,7 +6,15 @@ from datetime import date
 
 from app import create_app
 from app.extensions import db
-from app.models import Budget, Category, RecurringTransaction, SavingsGoal, Transaction, User
+from app.models import (
+    Budget,
+    Category,
+    RecurringTransaction,
+    SavingsGoal,
+    Tag,
+    Transaction,
+    User,
+)
 
 
 class AppTestCase(unittest.TestCase):
@@ -403,8 +411,39 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIn("เดือนนี้ vs เดือนก่อน", text)
         self.assertIn("หมวดใช้จ่ายสูงสุด (เดือนนี้)", text)
+        self.assertIn("แท็กใช้จ่ายสูงสุด (เดือนนี้)", text)
         self.assertIn("ค่าเฉลี่ยรายวัน (รายจ่าย)", text)
         self.assertIn("Rent", text)
+
+    def test_transaction_supports_multiple_tags_and_shows_in_list(self):
+        user = self._create_user("tags@example.com", "password123", "TagsUser")
+        self._login("tags@example.com", "password123")
+
+        create_resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "expense",
+                "amount": "350.00",
+                "tx_date": date.today().isoformat(),
+                "category_id": "-1",
+                "category_name": "Travel",
+                "note": "Taxi + meal",
+                "tags": "งาน, ท่องเที่ยว, งาน",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(create_resp.status_code, 200)
+        page = create_resp.get_data(as_text=True)
+        self.assertIn("งาน", page)
+        self.assertIn("ท่องเที่ยว", page)
+
+        with self.app.app_context():
+            tx = Transaction.query.filter_by(user_id=user.id, note="Taxi + meal").first()
+            self.assertIsNotNone(tx)
+            self.assertEqual(len(tx.tags), 2)
+            self.assertEqual(
+                Tag.query.filter_by(user_id=user.id).order_by(Tag.name.asc()).count(), 2
+            )
 
     def test_recurring_generates_transaction_and_does_not_duplicate_same_day(self):
         user = self._create_user("recur@example.com", "password123", "RecurUser")

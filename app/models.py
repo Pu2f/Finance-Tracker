@@ -12,6 +12,22 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .extensions import db
 
 
+transaction_tag = db.Table(
+    "transaction_tag",
+    db.Column(
+        "transaction_id",
+        db.ForeignKey("transaction.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.Column(
+        "tag_id",
+        db.ForeignKey("tag.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    db.UniqueConstraint("transaction_id", "tag_id", name="uq_transaction_tag_pair"),
+)
+
+
 class User(db.Model, UserMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(
@@ -40,6 +56,9 @@ class User(db.Model, UserMixin):
         back_populates="user", cascade="all, delete-orphan"
     )
     savings_goals: Mapped[list["SavingsGoal"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    tags: Mapped[list["Tag"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -112,6 +131,29 @@ class Transaction(db.Model):
 
     user: Mapped["User"] = relationship(back_populates="transactions")
     category: Mapped["Category | None"] = relationship(back_populates="transactions")
+    tags: Mapped[list["Tag"]] = relationship(
+        secondary=transaction_tag, back_populates="transactions"
+    )
+
+
+class Tag(db.Model):
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "name", name="uq_tag_user_name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(db.String(50), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="tags")
+    transactions: Mapped[list["Transaction"]] = relationship(
+        secondary=transaction_tag, back_populates="tags"
+    )
 
 
 class Budget(db.Model):
