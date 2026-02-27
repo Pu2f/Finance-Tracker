@@ -25,6 +25,16 @@
   </div>
 </div>
 
+{% if can_undo_tx_id %}
+  <div class="bg-amber-950/40 border border-amber-800 rounded-xl p-4 mb-8 flex items-center justify-between">
+    <p class="text-amber-200 text-sm">ลบรายการแล้ว ต้องการกู้คืนหรือไม่?</p>
+    <form method="post" action="{{ url_for('transactions.undo_delete', tx_id=can_undo_tx_id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="px-3 py-1 rounded bg-amber-700 hover:bg-amber-600 text-sm text-white">Undo</button>
+    </form>
+  </div>
+{% endif %}
+
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
     <div class="text-sm font-medium text-slate-400">ยอดเงินคงเหลือ</div>
