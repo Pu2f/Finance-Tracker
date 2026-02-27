@@ -39,6 +39,9 @@ class User(db.Model, UserMixin):
     recurring_transactions: Mapped[list["RecurringTransaction"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+    savings_goals: Mapped[list["SavingsGoal"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
@@ -188,3 +191,34 @@ class RecurringTransaction(db.Model):
     category: Mapped["Category | None"] = relationship(
         back_populates="recurring_transactions"
     )
+
+
+class SavingsGoal(db.Model):
+    __table_args__ = (
+        CheckConstraint("target_amount > 0", name="ck_goal_target_positive"),
+        CheckConstraint("current_amount >= 0", name="ck_goal_current_non_negative"),
+        CheckConstraint(
+            "monthly_plan_amount >= 0", name="ck_goal_monthly_plan_non_negative"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(db.String(120), nullable=False)
+    target_amount: Mapped[Decimal] = mapped_column(db.Numeric(12, 2), nullable=False)
+    current_amount: Mapped[Decimal] = mapped_column(
+        db.Numeric(12, 2), default=0, nullable=False
+    )
+    monthly_plan_amount: Mapped[Decimal] = mapped_column(
+        db.Numeric(12, 2), default=0, nullable=False
+    )
+    start_date: Mapped[date] = mapped_column(nullable=False, default=date.today)
+    target_date: Mapped[date | None] = mapped_column(nullable=True)
+    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, nullable=False
+    )
+
+    user: Mapped["User"] = relationship(back_populates="savings_goals")

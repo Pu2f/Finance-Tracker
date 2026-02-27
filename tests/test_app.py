@@ -6,7 +6,7 @@ from datetime import date
 
 from app import create_app
 from app.extensions import db
-from app.models import Budget, Category, RecurringTransaction, Transaction, User
+from app.models import Budget, Category, RecurringTransaction, SavingsGoal, Transaction, User
 
 
 class AppTestCase(unittest.TestCase):
@@ -483,6 +483,69 @@ class AppTestCase(unittest.TestCase):
         self.assertIn("Data Tools", text)
         self.assertIn("Export CSV", text)
         self.assertIn("Import CSV", text)
+
+    def test_savings_goal_create_and_contribute(self):
+        user = self._create_user("goal@example.com", "password123", "GoalUser")
+        self._login("goal@example.com", "password123")
+
+        create_resp = self.client.post(
+            "/savings/new",
+            data={
+                "name": "Emergency Fund",
+                "target_amount": "10000.00",
+                "current_amount": "2000.00",
+                "monthly_plan_amount": "1000.00",
+                "start_date": "2026-02-01",
+                "target_date": "2026-12-31",
+                "is_active": "y",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(create_resp.status_code, 200)
+        self.assertIn("เพิ่มเป้าหมายการออมแล้ว", create_resp.get_data(as_text=True))
+
+        with self.app.app_context():
+            goal = SavingsGoal.query.filter_by(user_id=user.id, name="Emergency Fund").first()
+            self.assertIsNotNone(goal)
+            goal_id = goal.id
+
+        contribute_resp = self.client.post(
+            f"/savings/{goal_id}/contribute",
+            data={"amount": "500.00"},
+            follow_redirects=True,
+        )
+        self.assertEqual(contribute_resp.status_code, 200)
+        self.assertIn("บันทึกเงินออมเข้าเป้าหมายแล้ว", contribute_resp.get_data(as_text=True))
+
+        with self.app.app_context():
+            goal = SavingsGoal.query.filter_by(id=goal_id, user_id=user.id).first()
+            self.assertEqual(float(goal.current_amount), 2500.00)
+
+    def test_savings_goal_permission_blocks_other_users_edit(self):
+        user_a = self._create_user("goala@example.com", "password123", "GoalA")
+        user_b = self._create_user("goalb@example.com", "password123", "GoalB")
+
+        with self.app.app_context():
+            goal_b = SavingsGoal(
+                user_id=user_b.id,
+                name="Trip",
+                target_amount=5000.00,
+                current_amount=1000.00,
+                monthly_plan_amount=500.00,
+                start_date=date(2026, 2, 1),
+                target_date=None,
+                is_active=True,
+            )
+            db.session.add(goal_b)
+            db.session.commit()
+            goal_id = goal_b.id
+
+        self._login("goala@example.com", "password123")
+        edit_resp = self.client.get(f"/savings/{goal_id}/edit")
+        self.assertEqual(edit_resp.status_code, 404)
+
+        delete_resp = self.client.post(f"/savings/{goal_id}/delete")
+        self.assertEqual(delete_resp.status_code, 404)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,7 @@ def create_app(config_object=None):
     from .main.budgets.routes import budget_bp
     from .main.recurring.routes import recurring_bp
     from .main.data.routes import data_bp
+    from .main.savings.routes import savings_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(tx_bp)
@@ -44,6 +45,7 @@ def create_app(config_object=None):
     app.register_blueprint(budget_bp)
     app.register_blueprint(recurring_bp)
     app.register_blueprint(data_bp)
+    app.register_blueprint(savings_bp)
 
     # simple home route
     @app.get("/")
