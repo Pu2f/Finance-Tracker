@@ -43,6 +43,8 @@
 
 <script>
   (function () {
+    const categoryChoicesByType = {{ category_choices_by_type|default({}, true)|tojson }};
+    const requestedType = {{ requested_type|default('', true)|tojson }};
     const txTypeSelect = document.getElementById("tx-type");
     const categorySelect = document.getElementById("category-id");
     const categoryNameInput = document.getElementById("category-name");
@@ -52,7 +54,24 @@
 
     const OTHER_VALUE = "-1";
 
+    function rebuildCategoryOptions() {
+      const currentValue = categorySelect.value;
+      const choices = categoryChoicesByType[txTypeSelect.value] || [];
+      categorySelect.innerHTML = "";
+      for (const [value, label] of choices) {
+        const option = document.createElement("option");
+        option.value = String(value);
+        option.textContent = label;
+        categorySelect.appendChild(option);
+      }
+      const hasCurrent = choices.some(([value]) => String(value) === currentValue);
+      if (hasCurrent) {
+        categorySelect.value = currentValue;
+      }
+    }
+
     function updateCategoryUi() {
+      rebuildCategoryOptions();
       const isOther = categorySelect.value === OTHER_VALUE;
       categoryNameInput.disabled = !isOther;
       categoryNameLabel.textContent = "Category name";
@@ -62,6 +81,9 @@
       }
     }
 
+    if (requestedType && (requestedType === "income" || requestedType === "expense")) {
+      txTypeSelect.value = requestedType;
+    }
     updateCategoryUi();
     txTypeSelect.addEventListener("change", updateCategoryUi);
     categorySelect.addEventListener("change", updateCategoryUi);

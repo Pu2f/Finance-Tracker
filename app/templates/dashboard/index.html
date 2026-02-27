@@ -3,20 +3,12 @@
 {% block content %}
 <div class="flex justify-between items-center mb-8">
   <h1 class="text-2xl font-semibold text-white">แดชบอร์ดภาพรวม</h1>
-  <div class="flex space-x-3">
-    <a
-      class="flex items-center bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
-      href="{{ url_for('transactions.create', type='income') }}"
-    >
-      Add Income
-    </a>
-    <a
-      class="flex items-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
-      href="{{ url_for('transactions.create', type='expense') }}"
-    >
-      Add Expense
-    </a>
-  </div>
+  <a
+    class="flex items-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
+    href="{{ url_for('transactions.create') }}"
+  >
+    Add Transaction
+  </a>
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -250,4 +242,3 @@
   });
 </script>
 {% endblock %}
-

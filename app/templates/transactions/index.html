@@ -11,16 +11,10 @@
       Data Tools
     </a>
     <a
-      class="flex items-center bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
-      href="{{ url_for('transactions.create', type='income') }}"
-    >
-      Add Income
-    </a>
-    <a
       class="flex items-center bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
-      href="{{ url_for('transactions.create', type='expense') }}"
+      href="{{ url_for('transactions.create') }}"
     >
-      Add Expense
+      Add Transaction
     </a>
   </div>
 </div>

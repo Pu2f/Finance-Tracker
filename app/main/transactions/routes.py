@@ -304,6 +304,13 @@ def _category_choices(user_id: int, tx_type: str):
     return [(CATEGORY_OTHER, "อื่นๆ (ระบุเอง)")] + [(c.id, c.name) for c in cats]
 
 
+def _category_choices_by_type(user_id: int) -> dict[str, list[tuple[int, str]]]:
+    return {
+        "income": _category_choices(user_id, "income"),
+        "expense": _category_choices(user_id, "expense"),
+    }
+
+
 def _resolve_category_id(form: TransactionForm) -> int | None:
     category_id = form.category_id.data
     typed_name = (form.category_name.data or "").strip()
@@ -550,11 +557,15 @@ def import_csv():
 @login_required
 def create():
     form = TransactionForm()
+    requested_type = (request.args.get("type") or "").strip().lower()
+    if requested_type not in ("income", "expense"):
+        requested_type = ""
     # default type
     if request.method == "GET":
-        form.type.data = request.args.get("type", "expense")
+        form.type.data = requested_type or "expense"
 
     form.category_id.choices = _category_choices(current_user.id, form.type.data or "expense")
+    category_choices_by_type = _category_choices_by_type(current_user.id)
 
     # if type changes on POST, rebuild choices
     if request.method == "POST":
@@ -564,13 +575,37 @@ def create():
         selected_category_id = _resolve_category_id(form)
         if selected_category_id == -1:
             flash("หมวดหมู่ไม่ถูกต้อง", "error")
-            return render_template("transactions/form.html", form=form), 400
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type=requested_type,
+                ),
+                400,
+            )
         if selected_category_id == -2:
             flash("โปรดกรอกชื่อหมวดหมู่เมื่อเลือก 'อื่นๆ'", "error")
-            return render_template("transactions/form.html", form=form), 400
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type=requested_type,
+                ),
+                400,
+            )
         if selected_category_id == -3:
             flash("หากต้องการพิมพ์หมวดหมู่เอง ให้เลือก 'อื่นๆ' ก่อน", "error")
-            return render_template("transactions/form.html", form=form), 400
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type=requested_type,
+                ),
+                400,
+            )
 
         tx = Transaction(
             user_id=current_user.id,
@@ -587,7 +622,12 @@ def create():
         flash("เพิ่มรายการแล้ว", "success")
         return redirect(url_for("transactions.index"))
 
-    return render_template("transactions/form.html", form=form)
+    return render_template(
+        "transactions/form.html",
+        form=form,
+        category_choices_by_type=category_choices_by_type,
+        requested_type=requested_type,
+    )
 
 
 @tx_bp.route("/<int:tx_id>/edit", methods=["GET", "POST"])
@@ -607,18 +647,43 @@ def edit(tx_id: int):
     form = TransactionForm(obj=tx)
 
     form.category_id.choices = _category_choices(current_user.id, form.type.data)
+    category_choices_by_type = _category_choices_by_type(current_user.id)
 
     if form.validate_on_submit():
         selected_category_id = _resolve_category_id(form)
         if selected_category_id == -1:
             flash("หมวดหมู่ไม่ถูกต้อง", "error")
-            return render_template("transactions/form.html", form=form), 400
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type="",
+                ),
+                400,
+            )
         if selected_category_id == -2:
             flash("โปรดกรอกชื่อหมวดหมู่เมื่อเลือก 'อื่นๆ'", "error")
-            return render_template("transactions/form.html", form=form), 400
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type="",
+                ),
+                400,
+            )
         if selected_category_id == -3:
             flash("หากต้องการพิมพ์หมวดหมู่เอง ให้เลือก 'อื่นๆ' ก่อน", "error")
-            return render_template("transactions/form.html", form=form), 400
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type="",
+                ),
+                400,
+            )
 
         tx.type = form.type.data
         tx.amount = form.amount.data
@@ -646,7 +711,12 @@ def edit(tx_id: int):
                 form.category_name.data = tx.category.name
     if request.method == "GET":
         form.tags.data = ", ".join(tag.name for tag in sorted(tx.tags, key=lambda t: t.name))
-    return render_template("transactions/form.html", form=form)
+    return render_template(
+        "transactions/form.html",
+        form=form,
+        category_choices_by_type=category_choices_by_type,
+        requested_type="",
+    )
 
 
 @tx_bp.post("/<int:tx_id>/delete")
