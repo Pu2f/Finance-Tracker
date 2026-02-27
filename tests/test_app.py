@@ -13,6 +13,7 @@ from app.models import (
     SavingsGoal,
     Tag,
     Transaction,
+    TransactionDeletion,
     User,
 )
 
@@ -444,6 +445,55 @@ class AppTestCase(unittest.TestCase):
             self.assertEqual(
                 Tag.query.filter_by(user_id=user.id).order_by(Tag.name.asc()).count(), 2
             )
+
+    def test_transaction_soft_delete_and_undo(self):
+        user = self._create_user("softdelete@example.com", "password123", "SoftDelete")
+        self._login("softdelete@example.com", "password123")
+
+        create_resp = self.client.post(
+            "/transactions/new",
+            data={
+                "type": "expense",
+                "amount": "90.00",
+                "tx_date": date.today().isoformat(),
+                "category_id": "-1",
+                "category_name": "Food",
+                "note": "Soft delete me",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(create_resp.status_code, 200)
+
+        with self.app.app_context():
+            tx = Transaction.query.filter_by(user_id=user.id, note="Soft delete me").first()
+            self.assertIsNotNone(tx)
+            tx_id = tx.id
+
+        delete_resp = self.client.post(
+            f"/transactions/{tx_id}/delete", follow_redirects=True
+        )
+        self.assertEqual(delete_resp.status_code, 200)
+        page = delete_resp.get_data(as_text=True)
+        self.assertIn("ลบรายการแล้ว (กู้คืนได้)", page)
+        self.assertNotIn("Soft delete me", page)
+
+        with self.app.app_context():
+            deletion = TransactionDeletion.query.filter_by(
+                transaction_id=tx_id, user_id=user.id
+            ).first()
+            self.assertIsNotNone(deletion)
+
+        undo_resp = self.client.post(
+            f"/transactions/{tx_id}/undo-delete", follow_redirects=True
+        )
+        self.assertEqual(undo_resp.status_code, 200)
+        self.assertIn("กู้คืนรายการแล้ว", undo_resp.get_data(as_text=True))
+
+        with self.app.app_context():
+            deletion = TransactionDeletion.query.filter_by(
+                transaction_id=tx_id, user_id=user.id
+            ).first()
+            self.assertIsNone(deletion)
 
     def test_recurring_generates_transaction_and_does_not_duplicate_same_day(self):
         user = self._create_user("recur@example.com", "password123", "RecurUser")
