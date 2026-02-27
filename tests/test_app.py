@@ -338,6 +338,74 @@ class AppTestCase(unittest.TestCase):
         self.assertIn("Budget เดือนนี้", text)
         self.assertIn("Travel", text)
 
+    def test_transactions_show_deep_dashboard_insights(self):
+        user = self._create_user("insight@example.com", "password123", "InsightUser")
+        self._login("insight@example.com", "password123")
+
+        today = date.today()
+        current_month_start = today.replace(day=1)
+        if current_month_start.month == 1:
+            previous_month_date = date(current_month_start.year - 1, 12, 15)
+        else:
+            previous_month_date = date(
+                current_month_start.year, current_month_start.month - 1, 15
+            )
+
+        with self.app.app_context():
+            food = Category(user_id=user.id, name="Food", type="expense", is_active=True)
+            rent = Category(user_id=user.id, name="Rent", type="expense", is_active=True)
+            db.session.add_all([food, rent])
+            db.session.commit()
+            db.session.refresh(food)
+            db.session.refresh(rent)
+
+            db.session.add_all(
+                [
+                    Transaction(
+                        user_id=user.id,
+                        category_id=food.id,
+                        type="expense",
+                        amount=300.00,
+                        tx_date=today,
+                        note="Food current",
+                    ),
+                    Transaction(
+                        user_id=user.id,
+                        category_id=rent.id,
+                        type="expense",
+                        amount=1200.00,
+                        tx_date=today,
+                        note="Rent current",
+                    ),
+                    Transaction(
+                        user_id=user.id,
+                        category_id=food.id,
+                        type="expense",
+                        amount=500.00,
+                        tx_date=previous_month_date,
+                        note="Food previous",
+                    ),
+                    Transaction(
+                        user_id=user.id,
+                        category_id=None,
+                        type="income",
+                        amount=2500.00,
+                        tx_date=today,
+                        note="Income current",
+                    ),
+                ]
+            )
+            db.session.commit()
+
+        resp = self.client.get("/transactions/")
+        text = resp.get_data(as_text=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("เดือนนี้ vs เดือนก่อน", text)
+        self.assertIn("หมวดใช้จ่ายสูงสุด (เดือนนี้)", text)
+        self.assertIn("ค่าเฉลี่ยรายวัน (รายจ่าย)", text)
+        self.assertIn("Rent", text)
+
     def test_recurring_generates_transaction_and_does_not_duplicate_same_day(self):
         user = self._create_user("recur@example.com", "password123", "RecurUser")
         self._login("recur@example.com", "password123")
