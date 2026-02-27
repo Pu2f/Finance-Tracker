@@ -14,6 +14,7 @@ from ...extensions import db
 from ...models import (
     Budget,
     Category,
+    SavingsGoal,
     Tag,
     Transaction,
     TransactionDeletion,
@@ -189,6 +190,50 @@ def _daily_expense_insight(user_id: int):
     }
 
 
+def _savings_summary(user_id: int):
+    goals = (
+        SavingsGoal.query.filter_by(user_id=user_id, is_active=True)
+        .order_by(SavingsGoal.created_at.desc())
+        .all()
+    )
+    if not goals:
+        return {
+            "active_count": 0,
+            "total_target": 0.0,
+            "total_saved": 0.0,
+            "progress_pct": 0.0,
+            "top_goals": [],
+        }
+
+    total_target = sum(float(goal.target_amount) for goal in goals)
+    total_saved = sum(float(goal.current_amount) for goal in goals)
+    progress_pct = 0.0 if total_target == 0 else min((total_saved / total_target) * 100, 999.0)
+
+    goal_rows = []
+    for goal in goals:
+        target_amount = float(goal.target_amount)
+        saved_amount = float(goal.current_amount)
+        row_progress = 0.0 if target_amount == 0 else min((saved_amount / target_amount) * 100, 999.0)
+        goal_rows.append(
+            {
+                "id": goal.id,
+                "name": goal.name,
+                "saved": saved_amount,
+                "target": target_amount,
+                "progress_pct": row_progress,
+            }
+        )
+    top_goals = sorted(goal_rows, key=lambda row: row["progress_pct"], reverse=True)[:3]
+
+    return {
+        "active_count": len(goals),
+        "total_target": total_target,
+        "total_saved": total_saved,
+        "progress_pct": progress_pct,
+        "top_goals": top_goals,
+    }
+
+
 def _category_choices(user_id: int, tx_type: str):
     cats = (
         Category.query.filter_by(user_id=user_id, type=tx_type, is_active=True)
@@ -331,6 +376,7 @@ def index():
     balance = income_total - expense_total
     budget_progress, budget_month_label = _monthly_budget_progress(current_user.id)
     daily_expense_insight = _daily_expense_insight(current_user.id)
+    savings_summary = _savings_summary(current_user.id)
 
     return render_template(
         "transactions/index.html",
@@ -341,6 +387,7 @@ def index():
         budget_progress=budget_progress,
         budget_month_label=budget_month_label,
         daily_expense_insight=daily_expense_insight,
+        savings_summary=savings_summary,
         can_undo_tx_id=can_undo_tx_id,
     )
 

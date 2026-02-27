@@ -2,7 +2,7 @@
 {% block title %}Transactions{% endblock %}
 {% block content %}
 <div class="flex justify-between items-center mb-8">
-  <h1 class="text-2xl font-semibold text-white">Transactions</h1>
+  <h1 class="text-2xl font-semibold text-white">Dashboard</h1>
   <div class="flex space-x-3">
     <a
       class="flex items-center bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
@@ -96,6 +96,44 @@
   </div>
 </div>
 
+<div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-medium text-white">Savings Goals Snapshot</h2>
+    <a class="text-sm text-slate-300 hover:text-white" href="{{ url_for('savings.index') }}">View all goals</a>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4">
+      <div class="text-xs text-slate-400">Active goals</div>
+      <div class="text-2xl font-bold text-white mt-1">{{ savings_summary.active_count }}</div>
+    </div>
+    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4">
+      <div class="text-xs text-slate-400">Saved / Target</div>
+      <div class="text-lg font-semibold text-white mt-1">
+        ฿{{ "{:,.2f}".format(savings_summary.total_saved) }} / ฿{{ "{:,.2f}".format(savings_summary.total_target) }}
+      </div>
+    </div>
+    <div class="rounded-lg bg-slate-950 border border-slate-800 p-4">
+      <div class="text-xs text-slate-400">Total progress</div>
+      <div class="text-2xl font-bold text-indigo-300 mt-1">{{ "{:,.1f}".format(savings_summary.progress_pct) }}%</div>
+    </div>
+  </div>
+  <div class="space-y-2">
+    {% for goal in savings_summary.top_goals %}
+      <div class="rounded-lg bg-slate-950 border border-slate-800 p-3">
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-200">{{ goal.name }}</span>
+          <span class="text-xs text-slate-400">{{ "{:,.1f}".format(goal.progress_pct) }}%</span>
+        </div>
+        <div class="h-2 rounded bg-slate-800 overflow-hidden mt-2">
+          <div class="h-full bg-indigo-500" style="width: {{ [goal.progress_pct, 100]|min }}%;"></div>
+        </div>
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-400">ยังไม่มีเป้าหมายการออมที่ active</p>
+    {% endfor %}
+  </div>
+</div>
+
 <form class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-8 flex flex-wrap gap-4 items-end" method="get">
   <div class="flex flex-col space-y-1.5 flex-1 min-w-[150px]">
     <label class="text-xs text-slate-400">Type</label>
@@ -179,6 +217,16 @@
     Chart.defaults.color = "#94a3b8";
     Chart.defaults.borderColor = "rgba(255, 255, 255, 0.1)";
 
+    function buildPieColors(count) {
+      if (!count || count <= 0) return [];
+      const colors = [];
+      for (let i = 0; i < count; i += 1) {
+        const hue = Math.round((360 / count) * i);
+        colors.push(`hsl(${hue} 72% 54%)`);
+      }
+      return colors;
+    }
+
     const pieElement = document.getElementById("category-pie-chart");
     if (pieElement) {
       const pieCtx = pieElement.getContext("2d");
@@ -195,10 +243,9 @@
               labels: data.labels,
               datasets: [{
                 data: data.values,
-                backgroundColor: [
-                  "#be123c", "#e11d48", "#f43f5e", "#fb7185", "#fda4af",
-                  "#f87171", "#ef4444", "#dc2626", "#b91c1c", "#991b1b",
-                ],
+                backgroundColor: buildPieColors(data.labels.length),
+                borderColor: "#0f172a",
+                borderWidth: 2,
               }],
             },
             options: {
