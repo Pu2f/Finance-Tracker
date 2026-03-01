@@ -102,3 +102,30 @@ npm run tw:build
 ## Git Repository
 - URL: `git@github.com:Pu2f/Finance-Tracker.git`
 - มีการพัฒนาแบบ Commit Early และ Commit Often
+
+## จำนวนหน้าเว็บ (ไม่นับ base.html) มีทั้งหมด 17 หน้า
+หน้าหลัก:
+- home.html
+- ระบบสมาชิก (Auth):
+- login.html
+- register.html
+- profile.html
+- change_password.html
+รายการ (Transactions):
+- index.html (หน้ารายการ)
+- form.html (หน้าฟอร์มเพิ่ม/แก้ไข)
+หมวดหมู่ (Categories):
+- index.html
+- form.html
+งบประมาณ (Budgets):
+- index.html
+- form.html
+รายการประจำ (Recurring):
+- index.html
+- form.html
+เป้าหมายการออม (Savings):
+-index.html
+- form.html
+- contribute.html (หน้าฟอร์มเพิ่มเงินออม)
+ข้อมูล (Data): (ส่วนนี้คือฟังก์ชัน data tools สำหรับ import และ export ไฟล์ csv)
+- index.html
