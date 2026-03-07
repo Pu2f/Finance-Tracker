@@ -46,7 +46,7 @@
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
     <div class="flex items-center justify-between gap-3 mb-4">
       <h2 class="text-lg font-medium text-white">รายจ่ายตามหมวดหมู่</h2>
@@ -77,7 +77,7 @@
       <canvas id="monthly-chart"></canvas>
     </div>
   </div>
-  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 lg:col-span-2">
     <div class="flex items-center justify-between gap-3 mb-4">
       <h2 class="text-lg font-medium text-white">Top 5 หมวดหมู่รายจ่าย</h2>
       <select id="chart-range-top5" class="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md px-3 py-2 outline-none">
@@ -89,7 +89,7 @@
       </select>
     </div>
     <div class="h-80">
-      <canvas id="top-categories-chart"></canvas>
+      <canvas id="top-categories-chart" class="w-full h-full"></canvas>
     </div>
   </div>
 </div>
