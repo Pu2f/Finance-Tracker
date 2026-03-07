@@ -18,6 +18,7 @@ from ...models import (
     Tag,
     Transaction,
     TransactionDeletion,
+    transaction_tag,
 )
 from ...services.recurring import run_due_recurring_transactions
 
@@ -40,18 +41,17 @@ def _parse_date(value: str | None):
 
 
 def _active_transaction_query(user_id: int):
-    return (
-        Transaction.query.outerjoin(
-            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
-        )
-        .filter(
-            Transaction.user_id == user_id,
-            TransactionDeletion.transaction_id.is_(None),
-        )
+    return Transaction.query.outerjoin(
+        TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+    ).filter(
+        Transaction.user_id == user_id,
+        TransactionDeletion.transaction_id.is_(None),
     )
 
 
-def _build_filtered_query(user_id: int, tx_type: str | None, start: str | None, end: str | None):
+def _build_filtered_query(
+    user_id: int, tx_type: str | None, start: str | None, end: str | None
+):
     q = _active_transaction_query(user_id)
     if tx_type in ("income", "expense"):
         q = q.filter(Transaction.type == tx_type)
@@ -90,9 +90,9 @@ def _sync_transaction_tags(tx: Transaction, raw_tags: str | None):
         tx.tags = []
         return
 
-    existing_tags = (
-        Tag.query.filter(Tag.user_id == tx.user_id, Tag.name.in_(tag_names)).all()
-    )
+    existing_tags = Tag.query.filter(
+        Tag.user_id == tx.user_id, Tag.name.in_(tag_names)
+    ).all()
     existing_by_name = {tag.name: tag for tag in existing_tags}
 
     resolved_tags = []
@@ -126,7 +126,9 @@ def _monthly_budget_progress(user_id: int):
             Transaction.category_id,
             func.coalesce(func.sum(Transaction.amount), 0).label("spent"),
         )
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
         .filter(
             Transaction.user_id == user_id,
             TransactionDeletion.transaction_id.is_(None),
@@ -139,7 +141,9 @@ def _monthly_budget_progress(user_id: int):
         .all()
     )
     spent_by_category = {
-        int(category_id): float(spent) for category_id, spent in spent_rows if category_id
+        int(category_id): float(spent)
+        for category_id, spent in spent_rows
+        if category_id
     }
 
     budget_progress = []
@@ -151,7 +155,9 @@ def _monthly_budget_progress(user_id: int):
                 "budget": budget,
                 "spent": spent,
                 "remaining": amount - spent,
-                "progress_pct": 0.0 if amount == 0 else min((spent / amount) * 100, 999.0),
+                "progress_pct": (
+                    0.0 if amount == 0 else min((spent / amount) * 100, 999.0)
+                ),
                 "is_over": spent > amount,
             }
         )
@@ -187,7 +193,9 @@ def _daily_expense_insight(user_id: int):
     current_month_end = _next_month_start(current_month_start)
     current_expense = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
         .filter(
             Transaction.user_id == user_id,
             TransactionDeletion.transaction_id.is_(None),
@@ -204,6 +212,122 @@ def _daily_expense_insight(user_id: int):
         "month_label": current_month_start.strftime("%Y-%m"),
         "avg_daily_expense": avg_daily_expense,
         "days_elapsed": days_elapsed,
+    }
+
+
+def _monthly_comparison_insight(user_id: int):
+    current_month_start = date.today().replace(day=1)
+    current_month_end = _next_month_start(current_month_start)
+    if current_month_start.month == 1:
+        previous_month_start = date(current_month_start.year - 1, 12, 1)
+    else:
+        previous_month_start = date(
+            current_month_start.year, current_month_start.month - 1, 1
+        )
+    previous_month_end = current_month_start
+
+    current_expense = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
+            Transaction.type == "expense",
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .scalar()
+    )
+    previous_expense = (
+        db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Transaction.user_id == user_id,
+            TransactionDeletion.transaction_id.is_(None),
+            Transaction.type == "expense",
+            Transaction.tx_date >= previous_month_start,
+            Transaction.tx_date < previous_month_end,
+        )
+        .scalar()
+    )
+
+    current_expense_value = float(current_expense)
+    previous_expense_value = float(previous_expense)
+    if previous_expense_value == 0:
+        change_pct = 0.0
+    else:
+        change_pct = (
+            (current_expense_value - previous_expense_value) / previous_expense_value
+        ) * 100
+
+    return {
+        "current_month_label": current_month_start.strftime("%Y-%m"),
+        "previous_month_label": previous_month_start.strftime("%Y-%m"),
+        "current_expense": current_expense_value,
+        "previous_expense": previous_expense_value,
+        "change_pct": change_pct,
+    }
+
+
+def _top_spending_highlights(user_id: int):
+    current_month_start = date.today().replace(day=1)
+    current_month_end = _next_month_start(current_month_start)
+
+    top_category_row = (
+        db.session.query(
+            Category.name,
+            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
+        )
+        .join(Transaction, Transaction.category_id == Category.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Category.user_id == user_id,
+            Category.type == "expense",
+            Transaction.user_id == user_id,
+            Transaction.type == "expense",
+            TransactionDeletion.transaction_id.is_(None),
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .group_by(Category.name)
+        .order_by(func.sum(Transaction.amount).desc())
+        .first()
+    )
+
+    top_tag_row = (
+        db.session.query(
+            Tag.name,
+            func.coalesce(func.sum(Transaction.amount), 0).label("total"),
+        )
+        .join(transaction_tag, transaction_tag.c.tag_id == Tag.id)
+        .join(Transaction, Transaction.id == transaction_tag.c.transaction_id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Tag.user_id == user_id,
+            Transaction.user_id == user_id,
+            Transaction.type == "expense",
+            TransactionDeletion.transaction_id.is_(None),
+            Transaction.tx_date >= current_month_start,
+            Transaction.tx_date < current_month_end,
+        )
+        .group_by(Tag.name)
+        .order_by(func.sum(Transaction.amount).desc())
+        .first()
+    )
+
+    return {
+        "category_name": top_category_row[0] if top_category_row else "-",
+        "category_amount": float(top_category_row[1]) if top_category_row else 0.0,
+        "tag_name": top_tag_row[0] if top_tag_row else "-",
+        "tag_amount": float(top_tag_row[1]) if top_tag_row else 0.0,
     }
 
 
@@ -224,13 +348,19 @@ def _savings_summary(user_id: int):
 
     total_target = sum(float(goal.target_amount) for goal in goals)
     total_saved = sum(float(goal.current_amount) for goal in goals)
-    progress_pct = 0.0 if total_target == 0 else min((total_saved / total_target) * 100, 999.0)
+    progress_pct = (
+        0.0 if total_target == 0 else min((total_saved / total_target) * 100, 999.0)
+    )
 
     goal_rows = []
     for goal in goals:
         target_amount = float(goal.target_amount)
         saved_amount = float(goal.current_amount)
-        row_progress = 0.0 if target_amount == 0 else min((saved_amount / target_amount) * 100, 999.0)
+        row_progress = (
+            0.0
+            if target_amount == 0
+            else min((saved_amount / target_amount) * 100, 999.0)
+        )
         goal_rows.append(
             {
                 "id": goal.id,
@@ -257,12 +387,17 @@ def _category_choices(user_id: int, tx_type: str):
         .order_by(Category.name.asc())
         .all()
     )
+    if tx_type == "income":
+        return [(-2, "ระบุเอง"), (CATEGORY_OTHER, "อื่นๆ (ระบุเอง)")] + [
+            (c.id, c.name) for c in cats
+        ]
     if tx_type == "expense":
         preset_names = set(PRESET_CATEGORY_NAME_BY_VALUE.values())
         dynamic_cats = [
             c
             for c in cats
-            if c.name not in preset_names and c.name not in LEGACY_HIDDEN_EXPENSE_CATEGORIES
+            if c.name not in preset_names
+            and c.name not in LEGACY_HIDDEN_EXPENSE_CATEGORIES
         ]
         return (
             [(CATEGORY_OTHER, "อื่นๆ (ระบุเอง)")]
@@ -282,6 +417,29 @@ def _category_choices_by_type(user_id: int) -> dict[str, list[tuple[int, str]]]:
 def _resolve_category_id(form: TransactionForm) -> int | None:
     category_id = form.category_id.data
     typed_name = (form.category_name.data or "").strip()
+
+    if form.type.data == "income":
+        if not typed_name:
+            return -4
+        category = Category.query.filter_by(
+            user_id=current_user.id,
+            type=form.type.data,
+            name=typed_name,
+        ).first()
+        if category:
+            if not category.is_active:
+                category.is_active = True
+            return category.id
+
+        new_category = Category(
+            user_id=current_user.id,
+            name=typed_name,
+            type=form.type.data,
+            is_active=True,
+        )
+        db.session.add(new_category)
+        db.session.flush()
+        return new_category.id
 
     if category_id == CATEGORY_OTHER:
         if not typed_name:
@@ -360,7 +518,9 @@ def index():
     if end and end_d is None:
         flash("รูปแบบวันที่สิ้นสุดไม่ถูกต้อง", "error")
 
-    transactions = q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).limit(200).all()
+    transactions = (
+        q.order_by(Transaction.tx_date.desc(), Transaction.id.desc()).limit(200).all()
+    )
     undo_tx_id = request.args.get("undo_tx_id", type=int)
     can_undo_tx_id = None
     if undo_tx_id:
@@ -372,7 +532,9 @@ def index():
 
     income_total = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
         .filter(
             Transaction.user_id == current_user.id,
             TransactionDeletion.transaction_id.is_(None),
@@ -382,7 +544,9 @@ def index():
     )
     expense_total = (
         db.session.query(func.coalesce(func.sum(Transaction.amount), 0))
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
         .filter(
             Transaction.user_id == current_user.id,
             TransactionDeletion.transaction_id.is_(None),
@@ -393,6 +557,8 @@ def index():
     balance = income_total - expense_total
     budget_progress, budget_month_label = _monthly_budget_progress(current_user.id)
     daily_expense_insight = _daily_expense_insight(current_user.id)
+    monthly_comparison = _monthly_comparison_insight(current_user.id)
+    spending_highlights = _top_spending_highlights(current_user.id)
     savings_summary = _savings_summary(current_user.id)
 
     return render_template(
@@ -404,6 +570,8 @@ def index():
         budget_progress=budget_progress,
         budget_month_label=budget_month_label,
         daily_expense_insight=daily_expense_insight,
+        monthly_comparison=monthly_comparison,
+        spending_highlights=spending_highlights,
         savings_summary=savings_summary,
         can_undo_tx_id=can_undo_tx_id,
     )
@@ -417,7 +585,9 @@ def category_pie():
     rows = (
         db.session.query(Category.name, func.coalesce(func.sum(Transaction.amount), 0))
         .join(Transaction, Transaction.category_id == Category.id)
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
         .filter(
             Category.user_id == current_user.id,
             Category.type == tx_type,
@@ -447,7 +617,9 @@ def monthly():
             Transaction.type,
             func.coalesce(func.sum(Transaction.amount), 0).label("total"),
         )
-        .outerjoin(TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
         .filter(
             Transaction.user_id == current_user.id,
             TransactionDeletion.transaction_id.is_(None),
@@ -468,6 +640,40 @@ def monthly():
     income = [data[m]["income"] for m in labels]
     expense = [data[m]["expense"] for m in labels]
     return {"labels": labels, "income": income, "expense": expense}
+
+
+@tx_bp.get("/charts/top-categories")
+@login_required
+def top_categories():
+    range_start, range_end = _chart_range_bounds(request.args.get("range"))
+    rows = (
+        db.session.query(
+            Category.name, func.coalesce(func.sum(Transaction.amount), 0).label("total")
+        )
+        .join(Transaction, Transaction.category_id == Category.id)
+        .outerjoin(
+            TransactionDeletion, TransactionDeletion.transaction_id == Transaction.id
+        )
+        .filter(
+            Category.user_id == current_user.id,
+            Category.type == "expense",
+            Transaction.user_id == current_user.id,
+            Transaction.type == "expense",
+            TransactionDeletion.transaction_id.is_(None),
+        )
+        .filter(
+            Transaction.tx_date >= range_start if range_start else True,
+            Transaction.tx_date < range_end if range_end else True,
+        )
+        .group_by(Category.name)
+        .order_by(func.sum(Transaction.amount).desc())
+        .limit(5)
+        .all()
+    )
+
+    labels = [name for name, _ in rows]
+    values = [float(total) for _, total in rows]
+    return {"labels": labels, "values": values}
 
 
 @tx_bp.get("/export.csv")
@@ -595,7 +801,9 @@ def create():
     if request.method == "GET":
         form.type.data = requested_type or "expense"
 
-    form.category_id.choices = _category_choices(current_user.id, form.type.data or "expense")
+    form.category_id.choices = _category_choices(
+        current_user.id, form.type.data or "expense"
+    )
     category_choices_by_type = _category_choices_by_type(current_user.id)
 
     # if type changes on POST, rebuild choices
@@ -628,6 +836,17 @@ def create():
             )
         if selected_category_id == -3:
             flash("หากต้องการพิมพ์หมวดหมู่เอง ให้เลือก 'อื่นๆ' ก่อน", "error")
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type=requested_type,
+                ),
+                400,
+            )
+        if selected_category_id == -4:
+            flash("โปรดระบุหมวดหมู่รายรับ", "error")
             return (
                 render_template(
                     "transactions/form.html",
@@ -715,6 +934,17 @@ def edit(tx_id: int):
                 ),
                 400,
             )
+        if selected_category_id == -4:
+            flash("โปรดระบุหมวดหมู่รายรับ", "error")
+            return (
+                render_template(
+                    "transactions/form.html",
+                    form=form,
+                    category_choices_by_type=category_choices_by_type,
+                    requested_type="",
+                ),
+                400,
+            )
 
         tx.type = form.type.data
         tx.amount = form.amount.data
@@ -741,7 +971,9 @@ def edit(tx_id: int):
             if tx.category:
                 form.category_name.data = tx.category.name
     if request.method == "GET":
-        form.tags.data = ", ".join(tag.name for tag in sorted(tx.tags, key=lambda t: t.name))
+        form.tags.data = ", ".join(
+            tag.name for tag in sorted(tx.tags, key=lambda t: t.name)
+        )
     return render_template(
         "transactions/form.html",
         form=form,
@@ -764,9 +996,7 @@ def delete(tx_id: int):
         )
         .first_or_404()
     )
-    db.session.add(
-        TransactionDeletion(transaction_id=tx.id, user_id=current_user.id)
-    )
+    db.session.add(TransactionDeletion(transaction_id=tx.id, user_id=current_user.id))
     db.session.commit()
     flash("ลบรายการแล้ว (กู้คืนได้)", "info")
     return redirect(url_for("transactions.index", undo_tx_id=tx.id))

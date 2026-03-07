@@ -2,7 +2,7 @@
 {% block title %}Transactions{% endblock %}
 {% block content %}
 <div class="flex justify-between items-center mb-8">
-  <h1 class="text-2xl font-semibold text-white">Dashboard</h1>
+  <h1 class="text-2xl font-semibold text-white">แดชบอร์ดภาพรวม</h1>
   <div class="flex space-x-3">
     <a
       class="flex items-center bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-md text-sm font-medium transition-colors"
@@ -46,7 +46,7 @@
   </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
     <div class="flex items-center justify-between gap-3 mb-4">
       <h2 class="text-lg font-medium text-white">รายจ่ายตามหมวดหมู่</h2>
@@ -77,6 +77,21 @@
       <canvas id="monthly-chart"></canvas>
     </div>
   </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <h2 class="text-lg font-medium text-white">Top 5 หมวดหมู่รายจ่าย</h2>
+      <select id="chart-range-top5" class="bg-slate-950 border border-slate-800 text-slate-200 text-sm rounded-md px-3 py-2 outline-none">
+        <option value="day">วันนี้</option>
+        <option value="week">สัปดาห์นี้</option>
+        <option value="month" selected>เดือนนี้</option>
+        <option value="year">ปีนี้</option>
+        <option value="all">ทั้งหมด</option>
+      </select>
+    </div>
+    <div class="h-80">
+      <canvas id="top-categories-chart"></canvas>
+    </div>
+  </div>
 </div>
 
 <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-8">
@@ -103,6 +118,27 @@
     {% else %}
       <p class="text-slate-400 text-sm">ยังไม่ได้ตั้งงบของเดือนนี้</p>
     {% endfor %}
+  </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">เดือนนี้ vs เดือนก่อน</div>
+    <p class="text-base text-white mt-3">
+      {{ monthly_comparison.current_month_label }}: ฿{{ "{:,.2f}".format(monthly_comparison.current_expense) }}
+      | {{ monthly_comparison.previous_month_label }}: ฿{{ "{:,.2f}".format(monthly_comparison.previous_expense) }}
+    </p>
+    <p class="text-sm text-slate-400 mt-2">เปลี่ยนแปลง {{ "{:,.1f}".format(monthly_comparison.change_pct) }}%</p>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">หมวดใช้จ่ายสูงสุด (เดือนนี้)</div>
+    <p class="text-xl font-bold text-white mt-3">{{ spending_highlights.category_name }}</p>
+    <p class="text-sm text-slate-400 mt-2">฿{{ "{:,.2f}".format(spending_highlights.category_amount) }}</p>
+  </div>
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+    <div class="text-sm font-medium text-slate-400">แท็กใช้จ่ายสูงสุด (เดือนนี้)</div>
+    <p class="text-xl font-bold text-white mt-3">{{ spending_highlights.tag_name }}</p>
+    <p class="text-sm text-slate-400 mt-2">฿{{ "{:,.2f}".format(spending_highlights.tag_amount) }}</p>
   </div>
 </div>
 
@@ -236,8 +272,10 @@
     Chart.defaults.borderColor = "rgba(255, 255, 255, 0.1)";
     const chartRangeSelect = document.getElementById("chart-range");
     const chartRangeSecondarySelect = document.getElementById("chart-range-secondary");
+    const chartRangeTop5Select = document.getElementById("chart-range-top5");
     let pieChart = null;
     let barChart = null;
+    let topCategoriesChart = null;
 
     function showNoData(canvas, message) {
       const parent = canvas.parentNode;
@@ -259,7 +297,7 @@
       canvas.style.display = "block";
     }
 
-    function buildPieColors(count) {
+    function buildChartPalette(count) {
       if (!count || count <= 0) return [];
       const colors = [];
       for (let i = 0; i < count; i += 1) {
@@ -292,7 +330,7 @@
               labels: data.labels,
               datasets: [{
                 data: data.values,
-                backgroundColor: buildPieColors(data.labels.length),
+                backgroundColor: buildChartPalette(data.labels.length),
                 borderColor: "#0f172a",
                 borderWidth: 2,
               }],
@@ -357,9 +395,57 @@
         });
     }
 
+    function loadTopCategoriesChart(rangeKey) {
+      const topElement = document.getElementById("top-categories-chart");
+      if (!topElement) return;
+      const topCtx = topElement.getContext("2d");
+      fetch(`{{ url_for('transactions.top_categories') }}?range=${encodeURIComponent(rangeKey)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.labels || data.labels.length === 0) {
+            if (topCategoriesChart) {
+              topCategoriesChart.destroy();
+              topCategoriesChart = null;
+            }
+            showNoData(topCtx.canvas, "ไม่มีข้อมูลรายจ่ายตามหมวดหมู่");
+            return;
+          }
+          clearNoData(topCtx.canvas);
+          if (topCategoriesChart) topCategoriesChart.destroy();
+          topCategoriesChart = new Chart(topCtx, {
+            type: "bar",
+            data: {
+              labels: data.labels,
+              datasets: [
+                {
+                  label: "Expense",
+                  data: data.values,
+                  backgroundColor: buildChartPalette(data.labels.length),
+                  borderColor: "#0f172a",
+                  borderWidth: 1,
+                },
+              ],
+            },
+            options: {
+              indexAxis: "y",
+              responsive: true,
+              maintainAspectRatio: false,
+              scales: {
+                x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(255,255,255,0.06)" } },
+                y: { ticks: { color: "#cbd5e1" }, grid: { display: false } },
+              },
+              plugins: {
+                legend: { display: false },
+              },
+            },
+          });
+        });
+    }
+
     const initialRange = chartRangeSelect ? chartRangeSelect.value : "month";
     loadPieChart(initialRange);
     loadMonthlyChart(initialRange);
+    loadTopCategoriesChart(initialRange);
 
     function applyRangeSelection(selectedRange) {
       if (chartRangeSelect && chartRangeSelect.value !== selectedRange) {
@@ -368,8 +454,12 @@
       if (chartRangeSecondarySelect && chartRangeSecondarySelect.value !== selectedRange) {
         chartRangeSecondarySelect.value = selectedRange;
       }
+      if (chartRangeTop5Select && chartRangeTop5Select.value !== selectedRange) {
+        chartRangeTop5Select.value = selectedRange;
+      }
       loadPieChart(selectedRange);
       loadMonthlyChart(selectedRange);
+      loadTopCategoriesChart(selectedRange);
     }
 
     if (chartRangeSelect) {
@@ -380,6 +470,11 @@
     if (chartRangeSecondarySelect) {
       chartRangeSecondarySelect.addEventListener("change", function () {
         applyRangeSelection(chartRangeSecondarySelect.value || "month");
+      });
+    }
+    if (chartRangeTop5Select) {
+      chartRangeTop5Select.addEventListener("change", function () {
+        applyRangeSelection(chartRangeTop5Select.value || "month");
       });
     }
   });

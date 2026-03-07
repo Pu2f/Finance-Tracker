@@ -1,5 +1,6 @@
 from flask import Flask
-from flask import render_template
+from flask import redirect, render_template, url_for
+from flask_login import login_required
 from config import get_config, validate_required_env
 
 from .extensions import csrf, db, login_manager, migrate
@@ -49,5 +50,10 @@ def create_app(config_object=None):
     @app.get("/")
     def home():
         return render_template("home.html")
+
+    @app.get("/dashboard/")
+    @login_required
+    def dashboard():
+        return redirect(url_for("transactions.index"))
 
     return app
